@@ -15,19 +15,44 @@ logger = logging.getLogger(__name__)
 SPLITS = ("Training", "Validation")
 LABEL_DIR = "02.라벨링데이터"
 COLUMN_ORDER = [
-    'exp_id', 'split', 'data_id', 'test_day', 'test_time', 'rel_time',
-    'meas_v', 'meas_a', 'meas_t1', 'meas_t2', 'meas_p',
-    'meas_ch4', 'meas_co', 'meas_co2', 'meas_hcn', 'meas_hcl', 'meas_hf',
-    'meas_n2o', 'meas_no', 'meas_no2', 'meas_so2',
-    'indu_t', 'atmp_t', 'thermal_t',
-    'imgdata_id', 'tr_stage', 'tr_method', 'soc_status', 'bat_class',
+    "exp_id",
+    "split",
+    "data_id",
+    "test_day",
+    "test_time",
+    "rel_time",
+    "meas_v",
+    "meas_a",
+    "meas_t1",
+    "meas_t2",
+    "meas_p",
+    "meas_ch4",
+    "meas_co",
+    "meas_co2",
+    "meas_hcn",
+    "meas_hcl",
+    "meas_hf",
+    "meas_n2o",
+    "meas_no",
+    "meas_no2",
+    "meas_so2",
+    "indu_t",
+    "atmp_t",
+    "thermal_t",
+    "imgdata_id",
+    "tr_stage",
+    "tr_method",
+    "soc_status",
+    "bat_class",
 ]
 
 
 class LabelRecord(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    data_id: str = Field(pattern=r"^\d+$", description="실험 내 프레임 번호 (예: 00001)")
+    data_id: str = Field(
+        pattern=r"^\d+$", description="실험 내 프레임 번호 (예: 00001)"
+    )
     test_day: str = Field(pattern=r"^\d{6}$", description="측정 날짜 YYMMDD")
     test_time: str = Field(pattern=r"^\d{9}$", description="측정 시각 HHMMSSmmm")
 
@@ -46,7 +71,9 @@ class LabelRecord(BaseModel):
     meas_no: float
     meas_no2: float
     meas_so2: float
-    indu_t: float | None = Field(default=None, description="히터 온도 (과충전 실험에는 없음)")
+    indu_t: float | None = Field(
+        default=None, description="히터 온도 (과충전 실험에는 없음)"
+    )
     atmp_t: float
     thermal_t: float
 
@@ -65,10 +92,14 @@ def find_label_files(input_path: str) -> list[tuple[str, str, str]]:
     for split in SPLITS:
         label_root = os.path.join(input_path, split, LABEL_DIR)
         if not os.path.isdir(label_root):
-            logger.warning(f"{split} 라벨링 데이터 폴더가 없어 건너뜁니다: {label_root}")
+            logger.warning(
+                f"{split} 라벨링 데이터 폴더가 없어 건너뜁니다: {label_root}"
+            )
             continue
 
-        exp_dirs = sorted((e for e in os.scandir(label_root) if e.is_dir()), key=lambda e: e.name)
+        exp_dirs = sorted(
+            (e for e in os.scandir(label_root) if e.is_dir()), key=lambda e: e.name
+        )
         for exp_dir in exp_dirs:
             exp_id = exp_dir.name.rsplit("_", 1)[-1]
             for entry in sorted(os.scandir(exp_dir.path), key=lambda e: e.name):
@@ -92,7 +123,9 @@ def load_labels(files: list[tuple[str, str, str]], workers: int = 16) -> pd.Data
     failures = 0
     with logging_redirect_tqdm(), ThreadPoolExecutor(max_workers=workers) as executor:
         blobs = executor.map(_read_bytes, (path for _, _, path in files))
-        for (split, exp_id, path), blob in tqdm(zip(files, blobs), total=len(files), desc="라벨링 JSON 로드", unit="file"):
+        for (split, exp_id, path), blob in tqdm(
+            zip(files, blobs), total=len(files), desc="라벨링 JSON 로드", unit="file"
+        ):
             try:
                 if isinstance(blob, OSError):
                     raise blob
@@ -114,7 +147,9 @@ def load_labels(files: list[tuple[str, str, str]], workers: int = 16) -> pd.Data
 
 
 def add_relative_time(df: pd.DataFrame) -> pd.DataFrame:
-    timestamp = pd.to_datetime(df["test_day"] + df["test_time"], format="%y%m%d%H%M%S%f")
+    timestamp = pd.to_datetime(
+        df["test_day"] + df["test_time"], format="%y%m%d%H%M%S%f"
+    )
     start = timestamp.groupby(df["exp_id"]).transform("min")
 
     result = df.assign(rel_time=(timestamp - start).dt.total_seconds())
@@ -122,24 +157,26 @@ def add_relative_time(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_args() -> argparse.Namespace:
-    arg_parser = argparse.ArgumentParser(description='배터리 열폭주 제어 멀티모달 데이터를 pandas.DataFrame에서 처리할 수 있도록, csv 파일로 변환하는 스크립트입니다.')
-    arg_parser.add_argument(
-        '--input_path',
-        type=str,
-        required=True,
-        help='Training, Validation 폴더가 있는 압축 해제된 데이터셋 경로를 지정합니다. (예: ./3.개방데이터_압축해제/1.데이터)'
+    arg_parser = argparse.ArgumentParser(
+        description="배터리 열폭주 제어 멀티모달 데이터를 pandas.DataFrame에서 처리할 수 있도록, csv 파일로 변환하는 스크립트입니다."
     )
     arg_parser.add_argument(
-        '--output_path',
+        "--input_path",
         type=str,
         required=True,
-        help='출력 csv 파일 경로를 지정합니다. 상위 폴더가 없으면 생성합니다. (예: ./output/battery_labels.csv)'
+        help="Training, Validation 폴더가 있는 압축 해제된 데이터셋 경로를 지정합니다. (예: ./3.개방데이터_압축해제/1.데이터)",
     )
     arg_parser.add_argument(
-        '--workers',
+        "--output_path",
+        type=str,
+        default="./output/battery_labels.csv",
+        help="출력 csv 파일 경로를 지정합니다. 상위 폴더가 없으면 생성합니다. (예: ./output/battery_labels.csv)",
+    )
+    arg_parser.add_argument(
+        "--workers",
         type=int,
         default=16,
-        help='라벨링 파일을 병렬로 읽을 스레드 수를 지정합니다. (기본값: 16)'
+        help="라벨링 파일을 병렬로 읽을 스레드 수를 지정합니다. (기본값: 16)",
     )
     return arg_parser.parse_args()
 
@@ -165,10 +202,10 @@ def main() -> int:
     df = load_labels(files, workers=args.workers)
     df = add_relative_time(df)[COLUMN_ORDER]
 
-    df.to_csv(args.output_path, index=False, encoding='utf-8-sig')
+    df.to_csv(args.output_path, index=False, encoding="utf-8-sig")
     logger.info(f"{len(df)}행 x {len(df.columns)}열을 저장했습니다: {args.output_path}")
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
