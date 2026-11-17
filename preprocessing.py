@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +14,14 @@ logger = logging.getLogger(__name__)
 
 SPLITS = ("Training", "Validation")
 LABEL_DIR = "02.라벨링데이터"
+COLUMN_ORDER = [
+    'exp_id', 'split', 'data_id', 'test_day', 'test_time', 'rel_time',
+    'meas_v', 'meas_a', 'meas_t1', 'meas_t2', 'meas_p',
+    'meas_ch4', 'meas_co', 'meas_co2', 'meas_hcn', 'meas_hcl', 'meas_hf',
+    'meas_n2o', 'meas_no', 'meas_no2', 'meas_so2',
+    'indu_t', 'atmp_t', 'thermal_t',
+    'imgdata_id', 'tr_stage', 'tr_method', 'soc_status', 'bat_class',
+]
 
 
 class LabelRecord(BaseModel):
@@ -112,40 +121,54 @@ def add_relative_time(df: pd.DataFrame) -> pd.DataFrame:
     return result.sort_values(["exp_id", "data_id"], ignore_index=True)
 
 
-if __name__ == '__main__':
+def parse_args() -> argparse.Namespace:
     arg_parser = argparse.ArgumentParser(description='배터리 열폭주 제어 멀티모달 데이터를 pandas.DataFrame에서 처리할 수 있도록, csv 파일로 변환하는 스크립트입니다.')
     arg_parser.add_argument(
         '--input_path',
         type=str,
         required=True,
-        help='입력 데이터셋의 경로를 지정합니다. (예: ./data/데이터/)'
+        help='Training, Validation 폴더가 있는 압축 해제된 데이터셋 경로를 지정합니다. (예: ./3.개방데이터_압축해제/1.데이터)'
     )
     arg_parser.add_argument(
         '--output_path',
         type=str,
         required=True,
-        help='출력 데이터셋의 경로를 지정합니다. (예: ./data/output_dataset.csv)'
+        help='출력 csv 파일 경로를 지정합니다. 상위 폴더가 없으면 생성합니다. (예: ./output/battery_labels.csv)'
     )
-    args = arg_parser.parse_args()
+    arg_parser.add_argument(
+        '--workers',
+        type=int,
+        default=16,
+        help='라벨링 파일을 병렬로 읽을 스레드 수를 지정합니다. (기본값: 16)'
+    )
+    return arg_parser.parse_args()
 
-    stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.INFO)
 
-    logging.basicConfig(level=logging.INFO, handlers=[stream_handler])
-    logger = logging.getLogger(__name__)
-    logger.addHandler(stream_handler)
+def main() -> int:
+    args = parse_args()
+    logging.basicConfig(level=logging.INFO)
 
     logger.info("배터리 열폭주 제어 멀티모달 데이터를 변환하는 스크립트를 시작합니다.")
 
-    if not os.path.exists(args.input_path) or not os.path.exists(args.output_path):
-        logger.error(f"입력 또는 출력 경로가 존재하지 않습니다")
-        exit(255)
+    if not os.path.isdir(args.input_path):
+        logger.error(f"입력 경로가 존재하지 않습니다: {args.input_path}")
+        return 1
 
-    input_path = args.input_path
-    root_dir = os.listdir(path=f'{input_path}')
+    output_dir = os.path.dirname(os.path.abspath(args.output_path))
+    os.makedirs(output_dir, exist_ok=True)
 
-    if "Training" in root_dir:
-        train_dir = os.path.join(input_path, "Training")
+    files = find_label_files(args.input_path)
+    if not files:
+        logger.error(f"라벨링 JSON 파일을 찾지 못했습니다: {args.input_path}")
+        return 1
 
-    if "Validation" in root_dir:
-        val_dir = os.path.join(input_path, "Validation")
+    df = load_labels(files, workers=args.workers)
+    df = add_relative_time(df)[COLUMN_ORDER]
+
+    df.to_csv(args.output_path, index=False, encoding='utf-8-sig')
+    logger.info(f"{len(df)}행 x {len(df.columns)}열을 저장했습니다: {args.output_path}")
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
