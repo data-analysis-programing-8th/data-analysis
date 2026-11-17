@@ -1,6 +1,7 @@
 import os
 import logging
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 
 import orjson
 import pandas as pd
@@ -69,14 +70,24 @@ def find_label_files(input_path: str) -> list[tuple[str, str, str]]:
     return files
 
 
-def load_labels(files: list[tuple[str, str, str]]) -> pd.DataFrame:
+def _read_bytes(path: str) -> bytes | OSError:
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError as e:
+        return e
+
+
+def load_labels(files: list[tuple[str, str, str]], workers: int = 16) -> pd.DataFrame:
     rows = []
     failures = 0
-    with logging_redirect_tqdm():
-        for split, exp_id, path in tqdm(files, desc="라벨링 JSON 로드", unit="file"):
+    with logging_redirect_tqdm(), ThreadPoolExecutor(max_workers=workers) as executor:
+        blobs = executor.map(_read_bytes, (path for _, _, path in files))
+        for (split, exp_id, path), blob in tqdm(zip(files, blobs), total=len(files), desc="라벨링 JSON 로드", unit="file"):
             try:
-                with open(path, "rb") as f:
-                    record = LabelRecord.model_validate(orjson.loads(f.read()))
+                if isinstance(blob, OSError):
+                    raise blob
+                record = LabelRecord.model_validate(orjson.loads(blob))
             except (OSError, orjson.JSONDecodeError, ValidationError) as e:
                 failures += 1
                 logger.warning(f"읽기/검증 실패로 건너뜁니다: {path}\n{e}")
