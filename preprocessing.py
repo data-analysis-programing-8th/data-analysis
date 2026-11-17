@@ -104,6 +104,14 @@ def load_labels(files: list[tuple[str, str, str]], workers: int = 16) -> pd.Data
     return pd.DataFrame(rows, columns=COLUMNS)
 
 
+def add_relative_time(df: pd.DataFrame) -> pd.DataFrame:
+    timestamp = pd.to_datetime(df["test_day"] + df["test_time"], format="%y%m%d%H%M%S%f")
+    start = timestamp.groupby(df["exp_id"]).transform("min")
+
+    result = df.assign(rel_time=(timestamp - start).dt.total_seconds())
+    return result.sort_values(["exp_id", "data_id"], ignore_index=True)
+
+
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='배터리 열폭주 제어 멀티모달 데이터를 pandas.DataFrame에서 처리할 수 있도록, csv 파일로 변환하는 스크립트입니다.')
     arg_parser.add_argument(
