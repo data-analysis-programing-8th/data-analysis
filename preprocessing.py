@@ -2,7 +2,16 @@ import os
 import logging
 import argparse
 
-from pydantic import BaseModel, ConfigDict, Field
+import orjson
+import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
+
+logger = logging.getLogger(__name__)
+
+SPLITS = ("Training", "Validation")
+LABEL_DIR = "02.라벨링데이터"
 
 
 class LabelRecord(BaseModel):
@@ -36,6 +45,52 @@ class LabelRecord(BaseModel):
     tr_method: int = Field(ge=1, le=2)
     soc_status: int = Field(ge=1, le=2)
     bat_class: int = Field(ge=1, le=3)
+
+
+COLUMNS = [*LabelRecord.model_fields, "exp_id", "split"]
+
+
+def find_label_files(input_path: str) -> list[tuple[str, str, str]]:
+    files = []
+    for split in SPLITS:
+        label_root = os.path.join(input_path, split, LABEL_DIR)
+        if not os.path.isdir(label_root):
+            logger.warning(f"{split} 라벨링 데이터 폴더가 없어 건너뜁니다: {label_root}")
+            continue
+
+        exp_dirs = sorted((e for e in os.scandir(label_root) if e.is_dir()), key=lambda e: e.name)
+        for exp_dir in exp_dirs:
+            exp_id = exp_dir.name.rsplit("_", 1)[-1]
+            for entry in sorted(os.scandir(exp_dir.path), key=lambda e: e.name):
+                if entry.is_file() and entry.name.endswith(".json"):
+                    files.append((split, exp_id, entry.path))
+
+        logger.info(f"{split}: 실험 {len(exp_dirs)}개 폴더를 찾았습니다.")
+    return files
+
+
+def load_labels(files: list[tuple[str, str, str]]) -> pd.DataFrame:
+    rows = []
+    failures = 0
+    with logging_redirect_tqdm():
+        for split, exp_id, path in tqdm(files, desc="라벨링 JSON 로드", unit="file"):
+            try:
+                with open(path, "rb") as f:
+                    record = LabelRecord.model_validate(orjson.loads(f.read()))
+            except (OSError, orjson.JSONDecodeError, ValidationError) as e:
+                failures += 1
+                logger.warning(f"읽기/검증 실패로 건너뜁니다: {path}\n{e}")
+                continue
+
+            row = record.model_dump()
+            row["exp_id"] = exp_id
+            row["split"] = split
+            rows.append(row)
+
+    if failures:
+        logger.warning(f"전체 {len(files)}개 중 {failures}개 파일을 건너뛰었습니다.")
+    logger.info(f"라벨링 데이터 {len(rows)}개를 불러왔습니다.")
+    return pd.DataFrame(rows, columns=COLUMNS)
 
 
 if __name__ == '__main__':
