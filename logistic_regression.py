@@ -5,19 +5,19 @@ DATA_PATH = "battery_labels.csv"
 df = pd.read_csv(DATA_PATH)
 
 # 데이터 확인
-# print("데이터 크기:", df.shape)     # (218389, 29)
+print("데이터 크기:", df.shape)     # (218389, 29)
 
-# print("\n실험 개수:", df["exp_id"].nunique())   # 97
+print("\n실험 개수:", df["exp_id"].nunique())   # 97
 
-# print("\n열폭주 단계별 데이터 개수:")
-# print(df["tr_stage"].value_counts().sort_index())
+print("\n열폭주 단계별 데이터 개수:")
+print(df["tr_stage"].value_counts().sort_index())
 
-# print("\n결측값이 있는 열:")
-# missing_values = df.isna().sum()    # 결측값 = NaN 또는 빈값
-# print(missing_values[missing_values > 0])
+print("\n결측값이 있는 열:")
+missing_values = df.isna().sum()    # 결측값 = NaN 또는 빈값
+print(missing_values[missing_values > 0])
 
-# print("\n데이터 일부:")
-# print(df.head())
+print("\n데이터 일부:")
+print(df.head())
 
 
 # 실험별 최초 5단계 진입 시각
@@ -49,7 +49,7 @@ print(excluded_experiments)
 # 각 행에 최초 5단계 진입 시각 추가
 model_df = df.merge(
     stage5_time,
-    on = "exp_id",
+    on="exp_id",
     how="inner",
 )
 
@@ -60,7 +60,29 @@ print(model_df["exp_id"].nunique())
 
 print("\n5단계 진입 시각이 추가된 데이터:")
 print(
-    model_df[  # 실험 식별자, 실험 시작 후 현재 행까지 경과한 시간, 열 폭주 단계, 처음 5단계
+    model_df[
         ["exp_id", "rel_time", "tr_stage", "stage5_time"]
     ].head()
 )
+
+
+# 5단계 진입까지 남은 시간 계산
+model_df["seconds_to_stage5"] = (
+    model_df["stage5_time"] - model_df["rel_time"]
+)
+
+print("\n5단계 진입까지 남은 시간이 추가된 데이터:")
+print(
+    model_df[
+        [
+            "exp_id",
+            "rel_time",
+            "tr_stage",
+            "stage5_time",
+            "seconds_to_stage5",
+        ]
+    ].head()
+)
+
+print("\n최초 5단계 진입 행 개수:")
+print((model_df["seconds_to_stage5"] == 0).sum())
