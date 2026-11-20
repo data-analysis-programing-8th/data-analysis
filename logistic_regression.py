@@ -86,3 +86,22 @@ print(
 
 print("\n최초 5단계 진입 행 개수:")
 print((model_df["seconds_to_stage5"] == 0).sum())
+
+
+# 5단계 진입 시점과 진입 이후 데이터 제외
+rows_before_filter = len(model_df)
+
+model_df = model_df[
+    model_df["seconds_to_stage5"] > 0   # 5단계 진입전만 필터링 (양수 시간)
+].copy()
+
+excluded_rows = rows_before_filter - len(model_df)
+print("\n5단계 진입 이후 제외된 행 개수:\n", excluded_rows)
+
+print("\n5단계 진입 이후 제외 후 데이터 크기:\n", model_df.shape)
+
+print("\n0초 이하 데이터 개수:")
+print((model_df["seconds_to_stage5"] <= 0).sum())
+
+print("\n5단계 진입까지 남은 시간의 최솟값:")
+print(model_df["seconds_to_stage5"].min())
