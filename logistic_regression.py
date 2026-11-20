@@ -2,6 +2,26 @@ import pandas as pd
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
+SENSOR_COLUMNS = [                  # 센서 열 목록(총 18개)
+    "meas_v",
+    "meas_a",
+    "meas_t1",
+    "meas_t2",
+    "meas_p",
+    "meas_ch4",
+    "meas_co",
+    "meas_co2",
+    "meas_hcn",
+    "meas_hcl",
+    "meas_hf",
+    "meas_n2o",
+    "meas_no",
+    "meas_no2",
+    "meas_so2",
+    "indu_t",
+    "atmp_t",
+    "thermal_t",
+]
 
 df = pd.read_csv(DATA_PATH)
 
@@ -131,3 +151,25 @@ print(f"{model_df['target'].mean():.2%}")
 
 print("\n정답 열 추가 후 데이터 크기:")
 print(model_df.shape)
+
+
+# 모델 입력, 정답, 실험 그룹 분리
+X = model_df[SENSOR_COLUMNS]    # 모델 입력(센서)
+y = model_df["target"]          # 정답 라벨
+groups = model_df["exp_id"]      # 실험 그룹
+
+print("\n입력 데이터 X 크기:")
+print(X.shape)
+
+print("\n정답 데이터 y 크기:")
+print(y.shape)
+
+print("\n교차검증 그룹의 실험 개수:")
+print(groups.nunique())
+
+print("\n입력 센서 열:")
+print(X.columns.tolist())
+
+print("\n입력 센서의 결측값:")
+sensor_missing_values = X.isna().sum()
+print(sensor_missing_values[sensor_missing_values > 0])
