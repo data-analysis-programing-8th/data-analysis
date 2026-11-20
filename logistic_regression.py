@@ -1,6 +1,7 @@
 import pandas as pd
 
 DATA_PATH = "battery_labels.csv"
+HORIZON_SECONDS = 60               # 위험 구간 시간(초)
 
 df = pd.read_csv(DATA_PATH)
 
@@ -92,7 +93,7 @@ print((model_df["seconds_to_stage5"] == 0).sum())
 rows_before_filter = len(model_df)
 
 model_df = model_df[
-    model_df["seconds_to_stage5"] > 0   # 5단계 진입전만 필터링 (양수 시간)
+    model_df["seconds_to_stage5"] > 0    # 5단계 진입전만 필터링 (양수 시간)
 ].copy()
 
 excluded_rows = rows_before_filter - len(model_df)
@@ -105,3 +106,28 @@ print((model_df["seconds_to_stage5"] <= 0).sum())
 
 print("\n5단계 진입까지 남은 시간의 최솟값:")
 print(model_df["seconds_to_stage5"].min())
+
+
+
+# 향후 HORIZON_SECONDS초 이내 5단계 진입 여부
+
+# 모델이 예측해야할 정답 라벨 생성
+# 5단계 진입 전 중 HORIZON_SECONDS 시간 내 위험 여부(1 or 0)
+model_df["target"] = (
+    model_df["seconds_to_stage5"] <= HORIZON_SECONDS
+).astype(int)           # True/False -> 1/0 변환
+
+print("\n정답 라벨별 데이터 개수:")  # 0, 1 개수 확인
+print(model_df["target"].value_counts().sort_index())
+
+print("\n정답별 5단계 진입까지 남은 시간:")     # 0, 1 각각의 5단계까지 남은 시각
+print(
+    model_df.groupby("target")["seconds_to_stage5"]
+    .agg(["min", "max"])
+)
+
+print("\n위험 데이터 비율:")
+print(f"{model_df['target'].mean():.2%}")
+
+print("\n정답 열 추가 후 데이터 크기:")
+print(model_df.shape)
