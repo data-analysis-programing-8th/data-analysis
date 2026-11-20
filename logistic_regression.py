@@ -5,11 +5,9 @@ DATA_PATH = "battery_labels.csv"
 df = pd.read_csv(DATA_PATH)
 
 # 데이터 확인
-print("데이터 크기:")
-print(df.shape)
+print("데이터 크기:", df.shape)     # (218389, 29)
 
-print("\n실험 개수:")
-print(df["exp_id"].nunique())
+print("\n실험 개수:", df["exp_id"].nunique())   # 97
 
 print("\n열폭주 단계별 데이터 개수:")
 print(df["tr_stage"].value_counts().sort_index())
@@ -27,9 +25,22 @@ stage5_time = (
     df[df["tr_stage"] == 5]           # tr_stage가 5인 행 (열폭주 5단계)
     .groupby("exp_id")["rel_time"]    # 실험 ID별 실험 시작 후 경과 시간
     .min()                            # 가장 작은 시간(= 처음 시작 시간)
-    .rename("stage5_time")            # 데이터 이름 설정a
+    .rename("stage5_time")            # 데이터 이름 설정
 )
 
 print("\n실험 별 최초 5단계 진입\n", stage5_time.head())
 print("\n5단계가 기록된 실험 개수: ", len(stage5_time))
 
+
+# 5단계 없는 실험
+all_experiments = set(df["exp_id"].unique())   # 중복 제거한 전체 실험
+stage5_experiments = set(stage5_time.index)    # 5단계 실험ID
+excluded_experiments = sorted(                  # 5단계가 없는 부분 선정
+    all_experiments - stage5_experiments
+)
+
+print("\n5단계가 없는 실험 개수:")
+print(len(excluded_experiments))  # 3개
+
+print("\n5단계가 없는 실험 ID:")    # 20250820003, 20250829002, 20250829004
+print(excluded_experiments)
