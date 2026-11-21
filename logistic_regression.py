@@ -275,3 +275,19 @@ logistic_model.fit(
 
 print("\n로지스틱 회귀 모델 학습 완료")
 print("모델 학습 반복 횟수:", logistic_model.n_iter_[0])
+
+
+# 테스트 데이터 위험 여부 확인, 위험 확률 예측
+# 예측 형태  [[정상(0) 확률], [위험(1) 확률]
+#            [정상(0) 확률], [위험(1) 확률]...]
+y_pred = logistic_model.predict(X_test_scaled)      # 예측 (정상=0, 위험=1)
+
+# 위험O인 열의 구체적 확률
+y_risk_probability = logistic_model.predict_proba(
+    X_test_scaled
+)[:, 1]
+
+print("\n테스트 데이터 예측 완료")
+print("전체 예측 개수:", len(y_pred))
+print("위험 확률 개수:", len(y_risk_probability))
+print("위험으로 예측한 개수:", y_pred.sum())
