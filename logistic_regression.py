@@ -5,6 +5,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 
+from sklearn.model_selection import GroupKFold      # 모델 검증용
+
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
 SENSOR_COLUMNS = [                  # 센서 열 목록(총 18개)
@@ -309,3 +311,119 @@ test_log_loss = log_loss(   # loss 계산
 print("\n로지스틱 회귀 테스트 성능")
 print(f"정확도: {test_accuracy:.4f}")        # 97.5%
 print(f"Log Loss: {test_log_loss:.4f}")     # 0.0856
+
+
+
+# 모델 검증 5회(실험ID 단위)
+group_kfold = GroupKFold(
+    n_splits=5,     # 5개 분할
+)
+
+cv_accuracies = []  # 5개별 정확도
+cv_log_losses = []  # 5개별 loss
+
+# 5개 분할한 대로 회귀 돌리기
+for fold_number, (fold_train_index, fold_validation_index) in enumerate(
+    group_kfold.split(X, y, groups=groups),
+    start=1,
+):
+    # 현재 회차의 학습 데이터와 검증 데이터 분리
+    X_fold_train = X.iloc[fold_train_index]
+    X_fold_validation = X.iloc[fold_validation_index]
+
+    y_fold_train = y.iloc[fold_train_index]
+    y_fold_validation = y.iloc[fold_validation_index]
+
+    # 현재 회차의 학습 데이터 기준으로 결측값 처리
+    fold_imputer = SimpleImputer(
+        strategy="median",
+    )
+
+    X_fold_train_imputed = fold_imputer.fit_transform(
+        X_fold_train,
+    )
+
+    X_fold_validation_imputed = fold_imputer.transform(
+        X_fold_validation,
+    )
+
+    # 현재 회차의 학습 데이터 기준으로 표준화
+    fold_scaler = StandardScaler()
+
+    X_fold_train_scaled = fold_scaler.fit_transform(
+        X_fold_train_imputed,
+    )
+
+    X_fold_validation_scaled = fold_scaler.transform(
+        X_fold_validation_imputed,
+    )
+
+    # 현재 회차의 로지스틱 회귀 모델 생성 및 학습
+    fold_model = LogisticRegression(
+        max_iter=1000,
+    )
+
+    fold_model.fit(
+        X_fold_train_scaled,
+        y_fold_train,
+    )
+
+    # 현재 회차의 검증 데이터 예측
+    fold_pred = fold_model.predict(
+        X_fold_validation_scaled,
+    )
+
+    fold_risk_probability = fold_model.predict_proba(
+        X_fold_validation_scaled,
+    )[:, 1]
+
+    # 현재 회차의 정확도와 Loss 계산
+    fold_accuracy = accuracy_score(
+        y_fold_validation,
+        fold_pred,
+    )
+
+    fold_log_loss = log_loss(
+        y_fold_validation,
+        fold_risk_probability,
+    )
+
+    cv_accuracies.append(fold_accuracy)
+    cv_log_losses.append(fold_log_loss)
+
+    # 같은 실험이 학습과 검증에 중복됐는지 확인
+    fold_train_groups = set(
+        groups.iloc[fold_train_index].unique()
+    )
+
+    fold_validation_groups = set(
+        groups.iloc[fold_validation_index].unique()
+    )
+
+    overlap_groups = (
+        fold_train_groups
+        & fold_validation_groups
+    )
+
+    print(
+        f"{fold_number}회차 - "
+        f"정확도: {fold_accuracy:.4f}, "
+        f"Log Loss: {fold_log_loss:.4f}, "
+        f"중복 실험: {len(overlap_groups)}개"
+    )
+
+# 평균과 표준편차 계산을 위해 Series로 변환
+cv_accuracy_series = pd.Series(cv_accuracies)
+cv_log_loss_series = pd.Series(cv_log_losses)
+
+print("\n로지스틱 회귀 5겹 교차검증 결과")
+print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
+print(
+    "정확도 표준편차: "
+    f"{cv_accuracy_series.std(ddof=0):.4f}"
+)
+print(f"평균 Log Loss: {cv_log_loss_series.mean():.4f}")
+print(
+    "Log Loss 표준편차: "
+    f"{cv_log_loss_series.std(ddof=0):.4f}"
+)
