@@ -314,13 +314,13 @@ print(f"Log Loss: {test_log_loss:.4f}")     # 0.0856
 
 
 
-# 모델 검증 5회(실험ID 단위)
+# 모델 교차검증 5개 그룹(실험ID 단위)
 group_kfold = GroupKFold(
-    n_splits=5,     # 5개 분할
+    n_splits=5,     # 전체 실험을 5개 묶음으로 분할
 )
 
-cv_accuracies = []  # 5개별 정확도
-cv_log_losses = []  # 5개별 loss
+cv_accuracies = []  # 5회차 정확도
+cv_log_losses = []  # 5회차 Log Loss
 
 # 5개 분할한 대로 회귀 돌리기
 for fold_number, (fold_train_index, fold_validation_index) in enumerate(
@@ -427,3 +427,21 @@ print(
     "Log Loss 표준편차: "
     f"{cv_log_loss_series.std(ddof=0):.4f}"
 )
+
+
+# 결과 요약
+print("\n\n")
+print("※ 로지스틱 회귀 결과 요약")
+print(f"위험 구간 기준: 5단계 진입 전 {HORIZON_SECONDS}초")
+print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
+print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
+print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
+print(f"제외 실험: {len(excluded_experiments)}개 (5단계 기록 없음)")
+print(f"위험 데이터 비율: {y.mean():.2%}")
+print("-" * 50)
+print(f"단일 분할 정확도: {test_accuracy:.4f}")
+print(f"단일 분할 Log Loss: {test_log_loss:.4f}")
+print(f"교차검증 평균 정확도: {cv_accuracy_series.mean():.4f}")
+print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=0):.4f}")
+print(f"교차검증 평균 Log Loss: {cv_log_loss_series.mean():.4f}")
+print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=0):.4f}")
