@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
@@ -244,13 +245,13 @@ print(X_test_imputed.isna().sum().sum())
 scaler = StandardScaler()
 
 X_train_scaled = pd.DataFrame(
-    scaler.fit_transform(X_train_imputed),  # 학습 데이터 기준 표준화
+    scaler.fit_transform(X_train_imputed),  # 학습 데이터 기준 계산, 표준화
     columns=X_train_imputed.columns,
     index=X_train_imputed.index,
 )
 
 X_test_scaled = pd.DataFrame(
-    scaler.transform(X_test_imputed),       # 테스트 데이터 기준 표준화
+    scaler.transform(X_test_imputed),       # 학습 데이터 기준 테스트 데이터 표준화
     columns=X_test_imputed.columns,
     index=X_test_imputed.index,
 )
@@ -260,3 +261,17 @@ print(f"{X_train_scaled.to_numpy().mean():.6f}")
 
 print("\n표준화 후 학습 데이터 전체 표준편차:")
 print(f"{X_train_scaled.to_numpy().std():.6f}")
+
+
+# 로지스틱 회귀 모델 생성/학습
+logistic_model = LogisticRegression(
+    max_iter=1000,          # 최대 반복 횟수
+)
+# 로지스틱 학습
+logistic_model.fit(
+    X_train_scaled,         # 표준화한 센서 데이터
+    y_train,                # 정답 라벨
+)
+
+print("\n로지스틱 회귀 모델 학습 완료")
+print("모델 학습 반복 횟수:", logistic_model.n_iter_[0])
