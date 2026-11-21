@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.model_selection import GroupShuffleSplit
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
@@ -173,3 +174,43 @@ print(X.columns.tolist())
 print("\n입력 센서의 결측값:")
 sensor_missing_values = X.isna().sum()
 print(sensor_missing_values[sensor_missing_values > 0])
+
+
+# 실험 ID 단위로 학습 데이터와 테스트 데이터 분리
+group_split = GroupShuffleSplit(
+    n_splits=1,        # 데이터 나누기(학습/테스트)
+    test_size=0.2,     # 20% 테스트용 / 나머지(80%) 학습용  
+    random_state=42,    # seed
+)
+# 학습, 테스트의 인덱스
+train_index, test_index = next(
+    group_split.split(X, y, groups=groups)
+)
+X_train = X.iloc[train_index]   # 학습 행들 
+X_test = X.iloc[test_index]     # 테스트 행들
+y_train = y.iloc[train_index]   # 학습 열들
+y_test = y.iloc[test_index]     # 테스트 열들
+
+groups_train = groups.iloc[train_index]     # 학습 그룹
+groups_test = groups.iloc[test_index]       # 테스트 그룹
+
+# 분리 결과 테스트
+print("\n학습 입력 데이터 크기:")
+print(X_train.shape)
+
+print("\n테스트 입력 데이터 크기:")
+print(X_test.shape)
+
+print("\n학습 실험 개수:")
+print(groups_train.nunique())
+
+print("\n테스트 실험 개수:")
+print(groups_test.nunique())
+
+overlap_experiments = (
+    set(groups_train.unique())
+    & set(groups_test.unique())
+)
+
+print("\n학습과 테스트에 중복된 실험 ID:")  # 중복 확인
+print(overlap_experiments)
