@@ -3,6 +3,7 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, log_loss
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
@@ -291,3 +292,20 @@ print("\n테스트 데이터 예측 완료")
 print("전체 예측 개수:", len(y_pred))
 print("위험 확률 개수:", len(y_risk_probability))
 print("위험으로 예측한 개수:", y_pred.sum())
+
+
+# 테스트 데이터 정확도, Loss 평가
+# 정확도 = 맞게 예측한 개수 / 전체 테스트 데이터 개수
+test_accuracy = accuracy_score(     # 정확도 계산(예측값과 정답값 비교)
+    y_test,         # 실제 정답
+    y_pred,         # 모델 예측값
+)
+
+test_log_loss = log_loss(   # loss 계산 
+    y_test,                 # 실제 정답
+    y_risk_probability,     # 모델 위험 확률
+)
+
+print("\n로지스틱 회귀 테스트 성능")
+print(f"정확도: {test_accuracy:.4f}")
+print(f"Log Loss: {test_log_loss:.4f}")
