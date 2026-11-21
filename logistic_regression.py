@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
@@ -236,3 +237,26 @@ print(X_train_imputed.isna().sum().sum())
 
 print("\n결측값 처리 후 테스트 데이터의 결측값 확인:")
 print(X_test_imputed.isna().sum().sum())
+
+
+# 센서 데이터 표준화
+# 센서별 평균을 0, 표준편차를 1에 가깝게 맞춤
+scaler = StandardScaler()
+
+X_train_scaled = pd.DataFrame(
+    scaler.fit_transform(X_train_imputed),  # 학습 데이터 기준 표준화
+    columns=X_train_imputed.columns,
+    index=X_train_imputed.index,
+)
+
+X_test_scaled = pd.DataFrame(
+    scaler.transform(X_test_imputed),       # 테스트 데이터 기준 표준화
+    columns=X_test_imputed.columns,
+    index=X_test_imputed.index,
+)
+
+print("\n표준화 후 학습 데이터 전체 평균:")
+print(f"{X_train_scaled.to_numpy().mean():.6f}")
+
+print("\n표준화 후 학습 데이터 전체 표준편차:")
+print(f"{X_train_scaled.to_numpy().std():.6f}")
