@@ -307,5 +307,5 @@ test_log_loss = log_loss(   # loss 계산
 )
 
 print("\n로지스틱 회귀 테스트 성능")
-print(f"정확도: {test_accuracy:.4f}")
-print(f"Log Loss: {test_log_loss:.4f}")
+print(f"정확도: {test_accuracy:.4f}")        # 97.5%
+print(f"Log Loss: {test_log_loss:.4f}")     # 0.0856
