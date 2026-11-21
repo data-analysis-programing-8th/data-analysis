@@ -1,5 +1,6 @@
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
+from sklearn.impute import SimpleImputer
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60               # 위험 구간 시간(초)
@@ -195,22 +196,43 @@ groups_train = groups.iloc[train_index]     # 학습 그룹
 groups_test = groups.iloc[test_index]       # 테스트 그룹
 
 # 분리 결과 테스트
-print("\n학습 입력 데이터 크기:")
+print("\n학습 입력 데이터 크기:")   # (146558, 18)
 print(X_train.shape)
 
-print("\n테스트 입력 데이터 크기:")
+print("\n테스트 입력 데이터 크기:")  # (35564, 18)
 print(X_test.shape)
 
-print("\n학습 실험 개수:")
+print("\n학습 실험 개수:")          # 75
 print(groups_train.nunique())
 
-print("\n테스트 실험 개수:")
+print("\n테스트 실험 개수:")        # 19
 print(groups_test.nunique())
 
 overlap_experiments = (
     set(groups_train.unique())
     & set(groups_test.unique())
 )
-
-print("\n학습과 테스트에 중복된 실험 ID:")  # 중복 확인
+print("\n학습과 테스트에 중복된 실험 ID:")  # 중복 확인 -> 없음
 print(overlap_experiments)
+
+
+# 입력 센서 결측값 처리
+imputer = SimpleImputer(strategy="median")      # 결측값=중앙값으로
+
+X_train_imputed = pd.DataFrame(         # 학습 데이터
+    imputer.fit_transform(X_train),     # 학습 데이터의 결측값 채우기(중앙값)
+    columns=X_train.columns,            # " 열=센서
+    index=X_train.index,                # " 행=인덱스(번호)
+)
+
+X_test_imputed = pd.DataFrame(          # 테스트 데이터
+    imputer.transform(X_test),          # 테스트 데이터의 결측값 채우기(중앙값)
+    columns=X_test.columns,             # " 열=센서
+    index=X_test.index,                 # " 행=인덱스(번호)
+)
+
+print("\n결측값 처리 후 학습 데이터의 결측값 확인:")
+print(X_train_imputed.isna().sum().sum())
+
+print("\n결측값 처리 후 테스트 데이터의 결측값 확인:")
+print(X_test_imputed.isna().sum().sum())
