@@ -1,25 +1,25 @@
+"""EDA 실행 진입점: python eda-main.py"""
+import argparse
+import sys
 
 import eda
+from config import DATA_PATH, GRAPH_PATH
 
 
 def main():
-    print("===================================")
-    print("      Battery Data Analysis")
-    print("===================================")
+    parser = argparse.ArgumentParser(description="배터리 데이터 EDA 및 그래프 저장")
+    parser.add_argument("--data", default=str(DATA_PATH), help="전처리 CSV 경로")
+    parser.add_argument("--output", default=str(GRAPH_PATH), help="그래프 및 통계 CSV 저장 폴더")
+    args = parser.parse_args()
 
-    # 탐색적 데이터 분석 및 시각화
-    print("\n[1] Exploratory Data Analysis")
-    eda.main()
-
-    # 지도학습 모델
-    # 지도학습 팀에서 구현한 모델을 추후 연결
-    print("\n[2] Supervised Learning")
-    print("Model training is managed separately.")
-
-    print("\n===================================")
-    print("       Analysis Completed")
-    print("===================================")
+    print("===== Battery Data Analysis: EDA =====")
+    try:
+        eda.main(data_path=args.data, output_dir=args.output)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"[오류] {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
