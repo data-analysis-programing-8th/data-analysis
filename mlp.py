@@ -3,6 +3,8 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
+from sklearn.neural_network import MLPClassifier
+
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60     # 위험 구간 시간(초)
@@ -153,7 +155,7 @@ print(
 # 센서 데이터 표준화
 scaler = StandardScaler()
 
-X_train_scaled = scaler.fit_transform(X_train_imputed)  # 표준화: 센서별 평균과 표준편차 계산 후 표준화
+X_train_scaled = scaler.fit_transform(X_train_imputed)  # 센서별 평균과 표준편차 계산 후 표준화
 X_test_scaled = scaler.transform(X_test_imputed)        # 학습 데이터에서 계산한 동일한 기준으로 테스트 데이터 표준화
 
 print("\n표준화 후 학습 데이터 평균과 표준편차:")
@@ -161,3 +163,23 @@ print(
     f"{X_train_scaled.mean():.4f}",
     f"{X_train_scaled.std():.4f}",
 )
+
+
+# MLP 분류 모델 생성
+mlp_classifier = MLPClassifier(
+    hidden_layer_sizes=(64, 64, 64, 64, 64),
+    activation="relu",      # relu 활성화 함수 적용
+    max_iter=1000,          # 최대 1000번 반복
+    early_stopping=True,
+    alpha=0.1,
+    learning_rate_init=0.001,       # learning_rate - 보폭
+    random_state=42,
+)
+
+# 표준화된 학습 데이터로 모델 학습
+mlp_classifier.fit(
+    X_train_scaled,
+    y_train,
+)
+
+print("MLP 학습 반복 횟수:", mlp_classifier.n_iter_)
