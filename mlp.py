@@ -42,3 +42,14 @@ print(stage5_time.head())
 
 print("\n5단계가 기록된 실험 개수:")
 print(len(stage5_time))
+
+
+# 5단계 기록이 있는 실험만 남기기 + 진입 시각 추가
+model_df = df.merge(
+    stage5_time,
+    on="exp_id",
+    how="inner",
+)
+
+print("\n모델 데이터의 실험 개수:")
+print(model_df["exp_id"].nunique())
