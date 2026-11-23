@@ -233,7 +233,7 @@ def parse_args() -> argparse.Namespace:
         "--output_dir",
         type=str,
         default=BASE_DIR,
-        help="그래프 이미지를 저장할 폴더를 지정합니다. 폴더가 없으면 생성합니다. (기본값: prelude 폴더)",
+        help="그래프 이미지를 저장할 폴더를 지정합니다. 폴더가 없으면 생성합니다. (기본값: data_analysis 폴더)",
     )
     arg_parser.add_argument(
         "--ambient_rise",
