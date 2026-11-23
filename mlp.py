@@ -1,5 +1,6 @@
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
+from sklearn.impute import SimpleImputer
 
 
 DATA_PATH = "battery_labels.csv"
@@ -131,3 +132,18 @@ y_test = y.iloc[test_index]     # 테스트 정답
 
 print("\n학습/테스트 입력 데이터 크기:")
 print(X_train.shape, X_test.shape)
+
+
+# 학습 데이터의 중앙값으로 결측값 처리
+imputer = SimpleImputer(
+    strategy="median",
+)
+
+X_train_imputed = imputer.fit_transform(X_train)    # 학습 데이터의 중앙값 계산 및 결측값 처리
+X_test_imputed = imputer.transform(X_test)          # 같은 중앙값으로 테스트 데이터 처리
+
+print("\n결측값 처리 후 남은 결측값:")
+print(
+    pd.isna(X_train_imputed).sum(),
+    pd.isna(X_test_imputed).sum(),
+)
