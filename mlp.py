@@ -335,3 +335,34 @@ print(
     "Log Loss 표준편차: "
     f"{cv_log_loss_series.std(ddof=0):.4f}"
 )
+
+
+# 최종 결과 요약
+print("\n\n※ MLP 결과 요약")
+print(f"위험 구간 기준: 5단계 진입 전 {HORIZON_SECONDS}초")
+print(f"은닉층 구조: {HIDDEN_LAYER_SIZES}")
+print(f"활성화 함수: {mlp_classifier.activation}")
+print(f"초기 학습률: {LEARNING_RATE_INIT}")
+print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
+print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
+print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
+print(f"위험 데이터 비율: {y.mean():.2%}")
+print("-" * 50)
+print(f"단일 분할 정확도: {test_accuracy:.4f}")
+print(f"단일 분할 Log Loss: {test_log_loss:.4f}")
+print(
+    "교차검증 평균 정확도: "
+    f"{cv_accuracy_series.mean():.4f}"
+)
+print(
+    "교차검증 정확도 표준편차: "
+    f"{cv_accuracy_series.std(ddof=0):.4f}"
+)
+print(
+    "교차검증 평균 Log Loss: "
+    f"{cv_log_loss_series.mean():.4f}"
+)
+print(
+    "교차검증 Log Loss 표준편차: "
+    f"{cv_log_loss_series.std(ddof=0):.4f}"
+)
