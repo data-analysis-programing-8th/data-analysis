@@ -267,7 +267,7 @@ def parse_args() -> argparse.Namespace:
     arg_parser = argparse.ArgumentParser(
         description="의미 있는 7종 센서(전압, 배터리 온도 1·2, 압력, 열화상 온도, CO, CO2)의 실험 평균선을 미분해 급변 구간을 찾고, "
         "안정 구간과 급변 구간의 실험별 기울기를 boxplot으로 비교하는 스크립트입니다. "
-        "가로축은 prelude.py의 progress _no_ambient 버전과 같으며, 가열/과충전별로 2장을 저장합니다."
+        "가로축은 data_analysis.py의 progress _no_ambient 버전과 같으며, 가열/과충전별로 2장을 저장합니다."
     )
     arg_parser.add_argument(
         "--input_path",
@@ -279,7 +279,7 @@ def parse_args() -> argparse.Namespace:
         "--output_dir",
         type=str,
         default=BASE_DIR,
-        help="그래프 이미지를 저장할 폴더를 지정합니다. 폴더가 없으면 생성합니다. (기본값: prelude 폴더)",
+        help="그래프 이미지를 저장할 폴더를 지정합니다. 폴더가 없으면 생성합니다. (기본값: data_analysis 폴더)",
     )
     arg_parser.add_argument(
         "--ambient_rise",
