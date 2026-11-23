@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.model_selection import GroupShuffleSplit
 
 
 DATA_PATH = "battery_labels.csv"
@@ -106,3 +107,27 @@ print(y.shape)
 
 print("\n실험 그룹 개수:")
 print(groups.nunique())
+
+
+# 실험 ID 단위로 학습 데이터와 테스트 데이터 분리
+group_split = GroupShuffleSplit(
+    n_splits=1,         # 단일 분할
+    test_size=0.2,      # 테스트 20%, 학습용 80%
+    random_state=42,
+)
+
+train_index, test_index = next(
+    group_split.split(
+        X,
+        y,
+        groups=groups,
+    )
+)
+
+X_train = X.iloc[train_index]   # 학습용 입력 데이터
+X_test = X.iloc[test_index]     # 테스트용 입력 데이터
+y_train = y.iloc[train_index]   # 학습 정답
+y_test = y.iloc[test_index]     # 테스트 정답
+
+print("\n학습/테스트 입력 데이터 크기:")
+print(X_train.shape, X_test.shape)
