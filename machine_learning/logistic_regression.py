@@ -523,6 +523,40 @@ print(
 )
 
 
+# 실험별 사전 탐지 성공률 구현
+exp_results = []
+
+for exp_id, experiment in alarm_df.groupby("exp_id"):
+    # 실제 위험 구간에서 발생한 경보만 선택
+    risk_alarm = (
+        experiment["alarm"]
+        & experiment["target"].eq(1)
+    )
+
+    # 위험 구간에 경보가 하나라도 있으면 탐지 성공
+    detection_success = risk_alarm.any()
+
+    exp_results.append(
+        {
+            "exp_id": exp_id,
+            "success": detection_success,
+        }
+    )
+
+# 실험별 결과를 DataFrame으로 변환
+exp_results = pd.DataFrame(exp_results)
+
+early_detection_success_count = int(
+    exp_results["success"].sum()
+)
+early_detection_total_count = len(exp_results)
+
+early_detection_success_rate = (
+    early_detection_success_count
+    / early_detection_total_count
+)
+
+
 # 결과 요약
 print("\n\n")
 print("※ 로지스틱 회귀 결과 요약")
@@ -539,3 +573,13 @@ print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=1):.4f
 print(f"교차검증 평균 Log Loss: {cv_log_loss_series.mean():.4f}")
 print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=1):.4f}")
 print("-" * 50)
+print("실험별 사전 탐지 성공률")
+print(
+    "사전 탐지 성공: "
+    f"{early_detection_success_count}/"
+    f"{early_detection_total_count}개 실험"
+)
+print(
+    "사전 탐지 성공률: "
+    f"{early_detection_success_rate:.2%}"
+)
