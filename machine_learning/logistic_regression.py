@@ -417,12 +417,12 @@ print("\n로지스틱 회귀 5분할 교차검증 결과")
 print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
 print(
     "정확도 표준편차: "
-    f"{cv_accuracy_series.std(ddof=0):.4f}"
+    f"{cv_accuracy_series.std(ddof=1):.4f}"
 )
 print(f"평균 Log Loss: {cv_log_loss_series.mean():.4f}")
 print(
     "Log Loss 표준편차: "
-    f"{cv_log_loss_series.std(ddof=0):.4f}"
+    f"{cv_log_loss_series.std(ddof=1):.4f}"
 )
 
 
@@ -438,6 +438,6 @@ print("-" * 50)
 print(f"단일 분할 정확도: {test_accuracy:.4f}")
 print(f"단일 분할 Log Loss: {test_log_loss:.4f}")
 print(f"교차검증 평균 정확도: {cv_accuracy_series.mean():.4f}")
-print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=0):.4f}")
+print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=1):.4f}")
 print(f"교차검증 평균 Log Loss: {cv_log_loss_series.mean():.4f}")
-print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=0):.4f}")
+print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=1):.4f}")
