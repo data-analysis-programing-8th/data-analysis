@@ -167,7 +167,7 @@ print(
 
 # MLP 분류 모델 생성
 mlp_classifier = MLPClassifier(
-    hidden_layer_sizes=(64, 64, 64, 64, 64),
+    hidden_layer_sizes=(64, 64, 64, 64, 64),        # hidden layer
     activation="relu",      # relu 활성화 함수 적용
     max_iter=1000,          # 최대 1000번 반복
     early_stopping=True,
@@ -183,3 +183,20 @@ mlp_classifier.fit(
 )
 
 print("MLP 학습 반복 횟수:", mlp_classifier.n_iter_)
+
+
+# 테스트 데이터의 위험 여부와 위험 확률 예측
+y_pred = mlp_classifier.predict(
+    X_test_scaled
+)
+
+y_risk_probability = mlp_classifier.predict_proba(
+    X_test_scaled
+)[:, 1]
+
+print("\n테스트 데이터 예측")
+print(
+    "예측값/위험 확률 개수:",
+    len(y_pred),
+    len(y_risk_probability),
+)
