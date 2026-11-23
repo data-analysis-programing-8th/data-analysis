@@ -72,3 +72,15 @@ print(
         ]
     ].head()
 )
+
+
+# 최초 5단계 진입 전 데이터만 사용
+model_df = model_df[
+    model_df["seconds_to_stage5"] > 0       # 5단계 이전만 필터링
+].copy()
+
+print("\n5단계 진입 전 모델 데이터 개수:")
+print(len(model_df))
+
+print("\n5단계 진입 시점 이후 데이터 개수:")
+print((model_df["seconds_to_stage5"] <= 0).sum())
