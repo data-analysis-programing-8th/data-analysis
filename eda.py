@@ -491,13 +491,49 @@ def time_quality(df: pd.DataFrame, output_dir: Path) -> None:  #실험별 경과
     pd.DataFrame(records).to_csv(output_dir / 'experiment_time_quality.csv', index=False, encoding='utf-8-sig')
 
 
+def stage_arrival_boxplot(df: pd.DataFrame, output_dir: Path) -> None:
+    stages = [1, 2, 3, 4]
+    rows = df[df["tr_stage"].isin(stages) & df["tr_method"].isin([1, 2])]
+    first = rows.groupby(["exp_id", "tr_method", "tr_stage"])["rel_time"].min().dropna()
+    first.rename("first_arrival_seconds").to_csv(
+        output_dir / "stage_arrival_by_experiment.csv", encoding="utf-8-sig"
+    )
+    summary = first.groupby(level=["tr_method", "tr_stage"]).agg(["mean", "count"])
+    summary.to_csv(output_dir / "stage_arrival_summary.csv", encoding="utf-8-sig")
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+    for method, name, offset, color in [
+        (1, "가열", -0.2, "steelblue"), (2, "과충전", 0.2, "coral")
+    ]:
+        ax.bar([], [], color=color, label=name)
+        for stage in stages:
+            values = first[(first.index.get_level_values("tr_method") == method)
+                           & (first.index.get_level_values("tr_stage") == stage)]
+            if values.empty:
+                continue
+            x = stage + offset
+            ax.boxplot(values, positions=[x], widths=0.32, patch_artist=True,
+                       boxprops={"facecolor": color}, manage_ticks=False)
+            mean = values.mean()
+            ax.plot(x, mean, "D", color="black", markersize=4)
+            ax.annotate(f"{mean:,.1f}초", (x, mean), xytext=(0, 7),
+                        textcoords="offset points", ha="center", fontsize=8)
+    ax.plot([], [], "D", color="black", label="평균")
+    ax.set_xticks(stages, [f"{stage}단계" for stage in stages])
+    ax.set(xlabel="열폭주 단계", ylabel="실험 시작 후 경과 시간 (초)",
+           title="가열·과충전 실험의 단계별 최초 도달 시간 분포")
+    ax.legend()
+    fig.tight_layout()
+    save_plot("stage_arrival_boxplot.png", output_dir)
+
+
 def main(data_path=None, output_dir=None) -> None:  #전체 EDA를 실행.
     data_path = Path(data_path) if data_path is not None else Path(DATA_PATH)
     output_dir = Path(output_dir) if output_dir is not None else Path(GRAPH_PATH)
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f'[데이터 읽기] {data_path}')
     df = load_data(data_path)
-    for fn in [basic_statistics, missing_ratio, correlation_analysis, stage_distribution, experiment_distribution, sensor_histograms, sensor_boxplots, outlier_summary, category_distributions, stage_sensor_patterns, method_sensor_patterns, time_quality]:
+    for fn in [basic_statistics, missing_ratio, correlation_analysis, stage_distribution, experiment_distribution, sensor_histograms, sensor_boxplots, outlier_summary, category_distributions, stage_sensor_patterns, method_sensor_patterns, time_quality, stage_arrival_boxplot]:
         print(f'\n[분석] {fn.__name__}')
         fn(df, output_dir)
     print(f'\n[완료] EDA 결과: {output_dir}')
