@@ -3,13 +3,14 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.metrics import average_precision_score
+from sklearn.metrics import accuracy_score, log_loss
 
 # 1. 데이터 불러오기
 df = pd.read_csv("output/battery_labels.csv", dtype={"exp_id": str}, encoding="utf-8-sig")
 df = df.sort_values(["exp_id", "rel_time"]).reset_index(drop=True)
 
 # 2. 정답 만들기 (5단계 시작 시각 t5까지 T초 이내면 1)
-T = 180
+T = 60
 df["t5"] = df["exp_id"].map(df[df["tr_stage"] >= 5].groupby("exp_id")["rel_time"].min())
 df["y"] = ((df["t5"] - df["rel_time"]) <= T).astype(int)
 
@@ -51,6 +52,7 @@ y = df["y"]
 
 cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
 df["proba"] = 0.0
+df["fold"] = -1 
 for fold, (train_idx, test_idx) in enumerate(cv.split(X, df["tr_method"], df["exp_id"])):
     rf = RandomForestClassifier(
         n_estimators=200,
@@ -63,7 +65,18 @@ for fold, (train_idx, test_idx) in enumerate(cv.split(X, df["tr_method"], df["ex
     )
     rf.fit(X.iloc[train_idx], y.iloc[train_idx])
     df.loc[test_idx, "proba"] = rf.predict_proba(X.iloc[test_idx])[:, 1]
+    df.loc[test_idx, "fold"] = fold
     print(f"fold {fold}: PR-AUC {average_precision_score(y.iloc[test_idx], df.loc[test_idx, 'proba']):.3f}")
+
+# 5-1. 정확도와 손실값
+accs, losses = [], []
+for fold in range(5):
+    m = df["fold"] == fold                                                     # 이 fold에서 평가된 행만
+    accs.append(accuracy_score(y[m], df.loc[m, "proba"] >= 0.5))             # 확률 0.5 이상을 위험으로 판정
+    losses.append(log_loss(y[m], df.loc[m, "proba"], labels=[0, 1]))         # 확률이 정답에서 얼마나 벗어났나
+print(f"교차검증 정확도: {np.mean(accs):.4f} ± {np.std(accs, ddof=1):.4f}")
+print(f"교차검증 Log Loss: {np.mean(losses):.4f} ± {np.std(losses, ddof=1):.4f}")
+print(f"(참고) 항상 '정상'으로 답할 때 정확도: {1 - y.mean():.4f}")
 
 # 6. 경보 만들기 (확률이 기준값 이상으로 5초 연속이면 경보)
 threshold = 0.5
