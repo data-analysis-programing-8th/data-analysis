@@ -83,7 +83,7 @@ print("\n5단계 진입 전 모델 데이터 개수:")
 print(len(model_df))
 
 
-# 향후 60초 이내에 5단계로 진입하는 정답 라벨 생성
+# 향후 60초 이내에 5단계로 진입하는지 정답 라벨 생성
 # 5단계 진입 전 중 HORIZON_SECONDS 시간 내 위험 여부(1 or 0)
 model_df["target"] = (
     model_df["seconds_to_stage5"] <= HORIZON_SECONDS
@@ -91,3 +91,18 @@ model_df["target"] = (
 
 print("\n정답 라벨별 데이터 개수:")
 print(model_df["target"].value_counts().sort_index())
+
+
+# 모델 입력, 정답, 실험 그룹 분리
+X = model_df[SENSOR_COLUMNS]
+y = model_df["target"]
+groups = model_df["exp_id"]
+
+print("\n입력 데이터 X 크기:")
+print(X.shape)
+
+print("\n정답 데이터 y 크기:")
+print(y.shape)
+
+print("\n실험 그룹 개수:")
+print(groups.nunique())
