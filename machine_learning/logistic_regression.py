@@ -523,7 +523,8 @@ print(
 )
 
 
-# 실험별 사전 탐지 성공률 구현
+# [실험별 사전 탐지 성공률] 구현
+# 5단계 이상 진입 전 60초 위험 구간에서 경보가 한 번이라도 발생했으면 해당 실험 탐지 성공
 exp_results = []
 
 for exp_id, experiment in alarm_df.groupby("exp_id"):
@@ -535,11 +536,26 @@ for exp_id, experiment in alarm_df.groupby("exp_id"):
 
     # 위험 구간에 경보가 하나라도 있으면 탐지 성공
     detection_success = risk_alarm.any()
+    
+    # 위험 구간에서 처음 경보가 발생한 시각
+    first_alarm_time = experiment.loc[
+        risk_alarm,
+        "rel_time",
+    ].min()
+
+    # 탐지에 성공한 경우에만 경고 선행시간 계산
+    lead_time = (
+        experiment["stage5_time"].iloc[0]
+        - first_alarm_time
+        if detection_success
+        else float("nan")
+    )
 
     exp_results.append(
         {
-            "exp_id": exp_id,
-            "success": detection_success,
+            "exp_id": exp_id,               # 실험별 id
+            "success": detection_success,   # 탐지 성공 여부
+            "lead_time": lead_time,         # 경고 선행시간 계산
         }
     )
 
@@ -555,6 +571,17 @@ early_detection_success_rate = (
     early_detection_success_count
     / early_detection_total_count
 )
+
+
+# [경고 선행 시간] 계산
+# 경고 선행시간 = 최초 5단계 이상 진입 시각 - 최초 유효 경보 시각
+successful_lead_times = exp_results.loc[
+    exp_results["success"],
+    "lead_time",
+]
+
+median_lead_time = successful_lead_times.median()
+
 
 
 # 결과 요약
@@ -582,4 +609,9 @@ print(
 print(
     "사전 탐지 성공률: "
     f"{early_detection_success_rate:.2%}"
+)
+print("\n경고 선행시간")
+print(
+    "경고 선행시간 중앙값: "
+    f"{median_lead_time:.1f}초"
 )
