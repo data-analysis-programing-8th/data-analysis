@@ -10,6 +10,11 @@ from sklearn.metrics import accuracy_score, log_loss
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60     # 위험 구간 시간(초)
 
+# 최적의 성능을 나타낼 MLP 설정 (직접 여러번 비교)
+HIDDEN_LAYER_SIZES = (64, 64, 64, 64)
+LEARNING_RATE_INIT = 0.001
+
+
 SENSOR_COLUMNS = [       # 센서 열 목록(총 18개)
     "meas_v",
     "meas_a",
@@ -168,12 +173,12 @@ print(
 
 # MLP 분류 모델 생성
 mlp_classifier = MLPClassifier(
-    hidden_layer_sizes=(64, 64, 64, 64, 64),        # hidden layer
+    hidden_layer_sizes=HIDDEN_LAYER_SIZES,        # hidden layer
     activation="relu",      # relu 활성화 함수 적용
     max_iter=1000,          # 최대 1000번 반복
     early_stopping=True,
     alpha=0.1,
-    learning_rate_init=0.001,       # learning_rate - 보폭
+    learning_rate_init=LEARNING_RATE_INIT,       # learning_rate - 보폭
     random_state=42,
 )
 
@@ -203,7 +208,7 @@ print(
 )
 
 
-# 테스트 데이터 정확도(Accuracy)와 손실률(Log Loss) 계산
+# 테스트 데이터 정확도(Accuracy)와 손실값(Log Loss) 계산
 test_accuracy = accuracy_score(
     y_test,
     y_pred,
