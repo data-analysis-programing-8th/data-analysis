@@ -1,4 +1,3 @@
-"""EDA 실행 진입점: python eda-main.py"""
 import argparse
 import sys
 
@@ -12,7 +11,7 @@ def main():
     parser.add_argument("--output", default=str(GRAPH_PATH), help="그래프 및 통계 CSV 저장 폴더")
     args = parser.parse_args()
 
-    print("===== Battery Data Analysis: EDA =====")
+    print("===== 배터리 열폭주 데이터 탐색적 분석(EDA) =====")
     try:
         eda.main(data_path=args.data, output_dir=args.output)
     except (FileNotFoundError, ValueError, OSError) as exc:
