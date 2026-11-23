@@ -53,3 +53,22 @@ model_df = df.merge(
 
 print("\n모델 데이터의 실험 개수:")
 print(model_df["exp_id"].nunique())
+
+
+# 각 측정 시점에서 5단계 진입까지 남은 시간 계산
+model_df["seconds_to_stage5"] = (
+    model_df["stage5_time"] - model_df["rel_time"]
+)
+
+print("\n5단계 진입까지 남은 시간이 추가된 데이터:")
+print(
+    model_df[
+        [
+            "exp_id",       # 실험id
+            "rel_time",     # 실험 경과 시간
+            "tr_stage",     # 현재 열폭주 단계
+            "stage5_time",  # 5단계 시간
+            "seconds_to_stage5",    # 5단계까지 남은 시간
+        ]
+    ].head()
+)
