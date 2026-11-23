@@ -34,7 +34,7 @@ sensors =  ["meas_v",
 new_cols = {}
 for col in sensors:
     group = df.groupby("exp_id")[col]
-    for w in [10, 30, 60]:
+    for w in [5, 10, 30, 60, 120, 300]:
         new_cols[f"{col}_diff{w}"] = df[col] - group.shift(w).fillna(group.transform("first"))
         new_cols[f"{col}_mean{w}"] = group.transform(lambda s: s.rolling(w, min_periods=1).mean())
         new_cols[f"{col}_std{w}"] = group.transform(lambda s: s.rolling(w, min_periods=1).std()).fillna(0)
