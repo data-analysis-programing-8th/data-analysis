@@ -4,6 +4,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
 from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, log_loss
 
 
 DATA_PATH = "battery_labels.csv"
@@ -200,3 +201,21 @@ print(
     len(y_pred),
     len(y_risk_probability),
 )
+
+
+# 테스트 데이터 정확도(Accuracy)와 손실률(Log Loss) 계산
+test_accuracy = accuracy_score(
+    y_test,
+    y_pred,
+)
+
+test_log_loss = log_loss(
+    y_test,
+    y_risk_probability,
+)
+
+print("\nMLP 성능 테스트")
+print("은닉층 구조:", mlp_classifier.hidden_layer_sizes)
+print("초기 학습률:", mlp_classifier.learning_rate_init)
+print(f"정확도: {test_accuracy:.4f}")
+print(f"Log Loss: {test_log_loss:.4f}")
