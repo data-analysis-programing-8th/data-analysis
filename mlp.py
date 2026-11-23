@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
 
 
 DATA_PATH = "battery_labels.csv"
@@ -146,4 +147,17 @@ print("\n결측값 처리 후 남은 결측값:")
 print(
     pd.isna(X_train_imputed).sum(),
     pd.isna(X_test_imputed).sum(),
+)
+
+
+# 센서 데이터 표준화
+scaler = StandardScaler()
+
+X_train_scaled = scaler.fit_transform(X_train_imputed)  # 표준화: 센서별 평균과 표준편차 계산 후 표준화
+X_test_scaled = scaler.transform(X_test_imputed)        # 학습 데이터에서 계산한 동일한 기준으로 테스트 데이터 표준화
+
+print("\n표준화 후 학습 데이터 평균과 표준편차:")
+print(
+    f"{X_train_scaled.mean():.4f}",
+    f"{X_train_scaled.std():.4f}",
 )
