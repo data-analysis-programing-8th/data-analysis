@@ -6,12 +6,15 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score, log_loss
 
+from sklearn.model_selection import GroupKFold  # 교차 검증
+
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60     # 위험 구간 시간(초)
 
 # 최적의 성능을 나타낼 MLP 설정 (직접 여러번 비교)
-HIDDEN_LAYER_SIZES = (64, 64, 64, 64)
+# 현재 성능이 가장 좋았던 설정
+HIDDEN_LAYER_SIZES = (64, 64)
 LEARNING_RATE_INIT = 0.001
 
 
@@ -223,4 +226,93 @@ print("\nMLP 성능 테스트")
 print("은닉층 구조:", mlp_classifier.hidden_layer_sizes)
 print("초기 학습률:", mlp_classifier.learning_rate_init)
 print(f"정확도: {test_accuracy:.4f}")
-print(f"Log Loss: {test_log_loss:.4f}")
+print(f"Log Loss: {test_log_loss:.4f}\n")
+
+
+# 실험ID 단위 5분할 교차검증
+group_kfold = GroupKFold(
+    n_splits=5,     # 5분할
+)
+
+cv_accuracies = []  # 각각의 정확도
+cv_log_losses = []  # 각각의 손실값
+
+for fold_number, (fold_train_index, fold_validation_index) in enumerate(
+    group_kfold.split(
+        X,
+        y,
+        groups=groups,
+    ),
+    start=1,
+):
+    # 현재 회차의 학습 데이터와 검증 데이터 분리
+    X_fold_train = X.iloc[fold_train_index]
+    X_fold_validation = X.iloc[fold_validation_index]
+
+    y_fold_train = y.iloc[fold_train_index]
+    y_fold_validation = y.iloc[fold_validation_index]
+
+    # 학습 데이터의 중앙값으로 결측값 처리
+    fold_imputer = SimpleImputer(
+        strategy="median",
+    )
+
+    X_fold_train_imputed = fold_imputer.fit_transform(
+        X_fold_train
+    )
+    X_fold_validation_imputed = fold_imputer.transform(
+        X_fold_validation
+    )
+
+    # 학습 데이터 기준으로 표준화
+    fold_scaler = StandardScaler()
+
+    X_fold_train_scaled = fold_scaler.fit_transform(
+        X_fold_train_imputed
+    )
+    X_fold_validation_scaled = fold_scaler.transform(
+        X_fold_validation_imputed
+    )
+
+    # 현재 설정으로 MLP 생성 및 학습
+    fold_model = MLPClassifier(
+        hidden_layer_sizes=HIDDEN_LAYER_SIZES,
+        activation="relu",
+        max_iter=1000,
+        early_stopping=True,
+        alpha=0.1,
+        learning_rate_init=LEARNING_RATE_INIT,
+        random_state=42,
+    )
+
+    fold_model.fit(
+        X_fold_train_scaled,
+        y_fold_train,
+    )
+
+    # 검증 데이터 예측
+    fold_pred = fold_model.predict(
+        X_fold_validation_scaled
+    )
+    fold_risk_probability = fold_model.predict_proba(
+        X_fold_validation_scaled
+    )[:, 1]
+
+    # 현재 회차의 정확도와 Log Loss 계산
+    fold_accuracy = accuracy_score(
+        y_fold_validation,
+        fold_pred,
+    )
+    fold_log_loss = log_loss(
+        y_fold_validation,
+        fold_risk_probability,
+    )
+
+    cv_accuracies.append(fold_accuracy)
+    cv_log_losses.append(fold_log_loss)
+
+    print(
+        f"{fold_number}회차 - "
+        f"정확도: {fold_accuracy:.4f}, "
+        f"Log Loss: {fold_log_loss:.4f}"
+    )
