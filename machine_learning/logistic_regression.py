@@ -315,6 +315,14 @@ stratify_labels = model_df.loc[
 cv_accuracies = []  # 5회차 정확도
 cv_log_losses = []  # 5회차 Log Loss
 
+
+# 각 행이 검증 데이터였을 때 예측된 위험 확률 저장
+cv_proba = pd.Series(
+    index=X.index,
+    dtype=float,
+)
+
+
 # 5개 분할한 대로 회귀 돌리기
 for fold_number, (fold_train_index, fold_validation_index) in enumerate(
     stratified_group_kfold.split(
@@ -374,6 +382,11 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         X_fold_validation_scaled,
     )[:, 1]
 
+    # 현재 검증 회차에서 계산한 확률을 원래 행 위치에 저장
+    cv_proba.iloc[
+        fold_validation_index
+    ] = fold_risk_probability
+
     # 현재 회차의 정확도와 Loss 계산
     fold_accuracy = accuracy_score(
         y_fold_validation,
@@ -408,6 +421,14 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         f"Log Loss: {fold_log_loss:.4f}, "
         f"중복 실험: {len(overlap_groups)}개"
     )
+
+# 모든 행에 교차검증 예측 확률이 저장됐는지 확인
+if cv_proba.isna().any():
+    raise ValueError("교차검증 예측 확률이 없는 행이 있습니다.")
+
+print("\n교차검증 위험 확률 저장 개수:")
+print(cv_proba.notna().sum())
+
 
 # 평균과 표준편차 계산을 위해 Series로 변환
 cv_accuracy_series = pd.Series(cv_accuracies)
