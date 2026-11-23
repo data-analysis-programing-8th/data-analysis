@@ -48,30 +48,16 @@ print("\n데이터 일부:")
 print(df.head())
 
 
-# 실험별 최초 5단계 진입 시각
+# 실험별 최초 5단계 이상 진입 시각
 stage5_time = (
-    df[df["tr_stage"] == 5]           # tr_stage가 5인 행 (열폭주 5단계)
+    df[df["tr_stage"] >= 5]           # tr_stage가 5이상인 행 (열폭주 5, 6단계)
     .groupby("exp_id")["rel_time"]    # 실험 ID별 실험 시작 후 경과 시간
     .min()                            # 가장 작은 시간(= 처음 시작 시간)
     .rename("stage5_time")            # 데이터 이름 설정
 )
 
-print("\n실험 별 최초 5단계 진입\n", stage5_time.head())
+print("\n실험 별 최초 5단계 이상 진입\n", stage5_time.head())
 print("\n5단계가 기록된 실험 개수: ", len(stage5_time))
-
-
-# 5단계 없는 실험
-all_experiments = set(df["exp_id"].unique())   # 중복 제거한 전체 실험
-stage5_experiments = set(stage5_time.index)    # 5단계 실험ID
-excluded_experiments = sorted(                  # 5단계가 없는 부분 선정
-    all_experiments - stage5_experiments
-)
-
-print("\n5단계가 없는 실험 개수:")
-print(len(excluded_experiments))  # 3개
-
-print("\n5단계가 없는 실험 ID:")    # 20250820003, 20250829002, 20250829004
-print(excluded_experiments)
 
 
 # 각 행에 최초 5단계 진입 시각 추가
@@ -436,7 +422,6 @@ print(f"위험 구간 기준: 5단계 진입 전 {HORIZON_SECONDS}초")
 print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
 print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
 print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
-print(f"제외 실험: {len(excluded_experiments)}개 (5단계 기록 없음)")
 print(f"위험 데이터 비율: {y.mean():.2%}")
 print("-" * 50)
 print(f"단일 분할 정확도: {test_accuracy:.4f}")
