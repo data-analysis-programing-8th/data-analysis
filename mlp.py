@@ -13,7 +13,7 @@ DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60     # 위험 구간 시간(초)
 
 # 최적의 성능을 나타낼 MLP 설정 (직접 여러번 비교)
-# 현재 성능이 가장 좋았던 설정
+# 현재 단일 분할에서 성능이 가장 좋았던 설정
 HIDDEN_LAYER_SIZES = (64, 64)
 LEARNING_RATE_INIT = 0.001
 
@@ -316,3 +316,22 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         f"정확도: {fold_accuracy:.4f}, "
         f"Log Loss: {fold_log_loss:.4f}"
     )
+
+
+# 교차검증 결과의 평균과 표준편차 계산
+cv_accuracy_series = pd.Series(cv_accuracies)
+cv_log_loss_series = pd.Series(cv_log_losses)
+
+print("\nMLP 5분할 교차검증 결과")
+print("은닉층 구조:", HIDDEN_LAYER_SIZES)
+print("초기 학습률:", LEARNING_RATE_INIT)
+print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
+print(
+    "정확도 표준편차: "
+    f"{cv_accuracy_series.std(ddof=0):.4f}"
+)
+print(f"평균 Log Loss: {cv_log_loss_series.mean():.4f}")
+print(
+    "Log Loss 표준편차: "
+    f"{cv_log_loss_series.std(ddof=0):.4f}"
+)
