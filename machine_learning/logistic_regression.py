@@ -8,6 +8,10 @@ from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold   # 
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60                # 위험 구간 시간(초)
+
+ALARM_THRESHOLD = 0.5               # 위험으로 판정 할 확률 기준
+ALARM_CONSECUTIVE_SECONDS = 5       # 경보에 필요한 연속 위험 판정 시간(초)
+
 SENSOR_COLUMNS = [                  # 센서 열 목록(총 18개)
     "meas_v",
     "meas_a",
@@ -59,19 +63,19 @@ print("\n실험 별 최초 5단계 이상 진입\n", stage5_time.head())
 print("\n5단계 이상 진입시각이 기록된 실험 개수: ", len(stage5_time))
 
 
-# 각 행에 최초 5단계 진입 시각 추가
+# 각 행에 최초 5단계 이상 진입 시각 추가
 model_df = df.merge(
     stage5_time,
     on="exp_id",
     how="inner",
 )
 
-print("\n5단계 진입 시각 추가 후 데이터 크기:\n", model_df.shape)
+print("\n5단계 이상 진입 시각 추가 후 데이터 크기:\n", model_df.shape)
 
-print("\n5단계 진입 시각 추가 후 실험 개수:")
+print("\n5단계 이상 진입 시각 추가 후 실험 개수:")
 print(model_df["exp_id"].nunique())
 
-print("\n5단계 진입 시각이 추가된 데이터:")
+print("\n5단계 이상 진입 시각이 추가된 데이터:")
 print(
     model_df[
         ["exp_id", "rel_time", "tr_stage", "stage5_time"]
@@ -79,12 +83,12 @@ print(
 )
 
 
-# 5단계 진입까지 남은 시간 계산
+# 5단계 이상 진입까지 남은 시간 계산
 model_df["seconds_to_stage5"] = (
     model_df["stage5_time"] - model_df["rel_time"]
 )
 
-print("\n5단계 진입까지 남은 시간이 추가된 데이터:")
+print("\n5단계 이상 진입까지 남은 시간이 추가된 데이터:")
 print(
     model_df[
         [
@@ -97,34 +101,34 @@ print(
     ].head()
 )
 
-print("\n최초 5단계 진입 행 개수:")
+print("\n최초 5단계 이상 진입 행 개수:")
 print((model_df["seconds_to_stage5"] == 0).sum())
 
 
-# 5단계 진입 시점과 진입 이후 데이터 제외
+# 5단계 이상 진입 시점과 진입 이후 데이터 제외
 rows_before_filter = len(model_df)
 
 model_df = model_df[
-    model_df["seconds_to_stage5"] > 0    # 5단계 진입전만 필터링 (양수 시간)
+    model_df["seconds_to_stage5"] > 0    # 5단계 이상 진입전만 필터링 (양수 시간)
 ].copy()
 
 excluded_rows = rows_before_filter - len(model_df)
-print("\n5단계 진입 이후 제외된 행 개수:\n", excluded_rows)
+print("\n5단계 이상 진입 이후 제외된 행 개수:\n", excluded_rows)
 
-print("\n5단계 진입 이후 제외 후 데이터 크기:\n", model_df.shape)
+print("\n5단계 이상 진입 이후 제외 후 데이터 크기:\n", model_df.shape)
 
 print("\n0초 이하 데이터 개수:")
 print((model_df["seconds_to_stage5"] <= 0).sum())
 
-print("\n5단계 진입까지 남은 시간의 최솟값:")
+print("\n5단계 이상 진입까지 남은 시간의 최솟값:")
 print(model_df["seconds_to_stage5"].min())
 
 
 
-# 향후 HORIZON_SECONDS초 이내 5단계 진입 여부
+# 향후 HORIZON_SECONDS초 이내 5단계 이상 진입 여부
 
 # 모델이 예측해야할 정답 라벨 생성
-# 5단계 진입 전 중 HORIZON_SECONDS 시간 내 위험 여부(1 or 0)
+# 5단계 이상 진입 전 중 HORIZON_SECONDS 시간 내 위험 여부(1 or 0)
 model_df["target"] = (
     model_df["seconds_to_stage5"] <= HORIZON_SECONDS
 ).astype(int)           # True/False -> 1/0 변환
@@ -132,7 +136,7 @@ model_df["target"] = (
 print("\n정답 라벨별 데이터 개수:")  # 0, 1 개수 확인
 print(model_df["target"].value_counts().sort_index())
 
-print("\n정답별 5단계 진입까지 남은 시간:")     # 0, 1 각각의 5단계까지 남은 시각
+print("\n정답별 5단계 이상 진입까지 남은 시간:")     # 0, 1 각각의 5단계까지 남은 시각
 print(
     model_df.groupby("target")["seconds_to_stage5"]
     .agg(["min", "max"])
@@ -446,11 +450,83 @@ print(
     f"{cv_log_loss_series.std(ddof=1):.4f}"
 )
 
+# 경보 계산에 필요한 실험 ID, 시간, 정답과 예측 확률을 하나로 정리
+alarm_df = model_df.loc[
+    X.index,
+    [
+        "exp_id",       # 실험 ID
+        "rel_time",     # 실험 경과 시간
+        "stage5_time",  # 최초 5단계 이상 진입 시각
+        "target",       # 실제 정답
+    ],
+].copy()
+
+alarm_df["proba"] = cv_proba
+
+# 실험별 시간 순서로 정렬
+alarm_df = alarm_df.sort_values(
+    ["exp_id", "rel_time"]
+).reset_index(drop=True)
+
+# 위험 확률이 기준값 이상이면 1, 아니면 0
+alarm_df["risk_prediction"] = (
+    alarm_df["proba"]
+    .ge(ALARM_THRESHOLD)
+    .astype(int)
+)
+
+# 정상 판정이 나올 때마다 새로운 연속 구간 시작
+streak_group = (
+    alarm_df["risk_prediction"]
+    .eq(0)
+    .groupby(alarm_df["exp_id"])
+    .cumsum()
+)
+
+# 실험별로 위험 판정이 몇 초째 연속되는지 계산
+alarm_df["consecutive_risk_count"] = (
+    alarm_df["risk_prediction"]
+    .groupby(
+        [
+            alarm_df["exp_id"],
+            streak_group,
+        ]
+    )
+    .cumsum()
+)
+
+# ALARM_CONSECUTIVE_SECONDS 이상 위험 판정이 연속되면 최종 경보
+alarm_df["alarm"] = (
+    alarm_df["consecutive_risk_count"]
+    >= ALARM_CONSECUTIVE_SECONDS
+)
+
+print("\n경보 생성 결과")
+print(
+    f"경보 조건: 위험 확률 {ALARM_THRESHOLD} 이상 "
+    f"{ALARM_CONSECUTIVE_SECONDS}초 연속"
+)
+print(
+    "위험으로 판정된 행:",
+    alarm_df["risk_prediction"].sum(),
+)
+print(
+    "최종 경보가 켜진 행:",
+    alarm_df["alarm"].sum(),
+)
+print(
+    "경보가 발생한 실험:",
+    alarm_df.loc[
+        alarm_df["alarm"],
+        "exp_id",
+    ].nunique(),
+)
+
 
 # 결과 요약
 print("\n\n")
 print("※ 로지스틱 회귀 결과 요약")
-print(f"위험 구간 기준: 5단계 진입 전 {HORIZON_SECONDS}초")
+print(f"위험 구간 기준: 5단계 이상 진입 전 {HORIZON_SECONDS}초")
 print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
 print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
 print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
@@ -462,3 +538,4 @@ print(f"교차검증 평균 정확도: {cv_accuracy_series.mean():.4f}")
 print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=1):.4f}")
 print(f"교차검증 평균 Log Loss: {cv_log_loss_series.mean():.4f}")
 print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=1):.4f}")
+print("-" * 50)
