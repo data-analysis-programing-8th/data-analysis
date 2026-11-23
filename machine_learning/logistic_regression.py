@@ -1,11 +1,10 @@
 import pandas as pd
-from sklearn.model_selection import GroupShuffleSplit
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 
-from sklearn.model_selection import GroupKFold      # 모델 검증용
+from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold   # 모델 검증용
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60                # 위험 구간 시간(초)
@@ -57,7 +56,7 @@ stage5_time = (
 )
 
 print("\n실험 별 최초 5단계 이상 진입\n", stage5_time.head())
-print("\n5단계가 기록된 실험 개수: ", len(stage5_time))
+print("\n5단계 이상 진입시각이 기록된 실험 개수: ", len(stage5_time))
 
 
 # 각 행에 최초 5단계 진입 시각 추가
@@ -300,17 +299,29 @@ print(f"Log Loss: {test_log_loss:.4f}")     # 0.0856
 
 
 
-# 모델 교차검증 5개 그룹(실험ID 단위)
-group_kfold = GroupKFold(
-    n_splits=5,     # 전체 실험을 5개 묶음으로 분할
+# 가열·과충전 비율을 유지하는 실험 ID 단위 5분할 교차검증
+stratified_group_kfold = StratifiedGroupKFold(
+    n_splits=5,
+    shuffle=True,
+    random_state=42,
 )
+
+# 각 행이 가열 실험인지 과충전 실험인지 나타내는 값
+stratify_labels = model_df.loc[
+    X.index,
+    "tr_method",
+]
 
 cv_accuracies = []  # 5회차 정확도
 cv_log_losses = []  # 5회차 Log Loss
 
 # 5개 분할한 대로 회귀 돌리기
 for fold_number, (fold_train_index, fold_validation_index) in enumerate(
-    group_kfold.split(X, y, groups=groups),
+    stratified_group_kfold.split(
+        X,
+        stratify_labels,
+        groups=groups,
+    ),
     start=1,
 ):
     # 현재 회차의 학습 데이터와 검증 데이터 분리
@@ -402,7 +413,7 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
 cv_accuracy_series = pd.Series(cv_accuracies)
 cv_log_loss_series = pd.Series(cv_log_losses)
 
-print("\n로지스틱 회귀 5겹 교차검증 결과")
+print("\n로지스틱 회귀 5분할 교차검증 결과")
 print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
 print(
     "정확도 표준편차: "
