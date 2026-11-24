@@ -436,6 +436,7 @@ alarm_df = model_df.loc[
         "rel_time",
         "stage5_time",
         "target",
+        "tr_method",
     ],
 ].copy()
 alarm_df["proba"] = cv_proba
@@ -486,6 +487,30 @@ f1 = f1_score(
     zero_division=0,
 )
 
+# 가열·과충전 방식별 분류 성능 계산
+classification_by_method = {}
+
+for method_value, method_name in ((1, "가열"), (2, "과충전")):
+    method_rows = alarm_df["tr_method"].eq(method_value)
+
+    classification_by_method[method_name] = {
+        "recall": recall_score(
+            alarm_df.loc[method_rows, "target"],
+            alarm_df.loc[method_rows, "alarm"],
+            zero_division=0,
+        ),
+        "precision": precision_score(
+            alarm_df.loc[method_rows, "target"],
+            alarm_df.loc[method_rows, "alarm"],
+            zero_division=0,
+        ),
+        "f1": f1_score(
+            alarm_df.loc[method_rows, "target"],
+            alarm_df.loc[method_rows, "alarm"],
+            zero_division=0,
+        ),
+    }
+
 print("\nMLP 경보 기준 분류 성능")
 print(
     f"경보 조건: 위험 확률 {ALARM_THRESHOLD:.1f} 이상 "
@@ -530,6 +555,7 @@ for exp_id, experiment in alarm_df.groupby("exp_id"):
     exp_results.append(
         {
             "exp_id": exp_id,
+            "tr_method": experiment["tr_method"].iloc[0],
             "success": detection_success,
             "lead_time": lead_time,
             "false_alarms": int(false_alarm_starts.sum()),
@@ -552,6 +578,29 @@ false_alarm_count = int(
 false_alarm_experiment_count = int(
     exp_results["false_alarms"].gt(0).sum()
 )
+
+# 가열·과충전 방식별 조기경보 성능 계산
+early_warning_by_method = {}
+
+for method_value, method_name in ((1, "가열"), (2, "과충전")):
+    method_results = exp_results[
+        exp_results["tr_method"].eq(method_value)
+    ]
+
+    early_warning_by_method[method_name] = {
+        "success_count": int(method_results["success"].sum()),
+        "total_count": len(method_results),
+        "median_lead_time": method_results.loc[
+            method_results["success"],
+            "lead_time",
+        ].median(),
+        "false_alarm_count": int(
+            method_results["false_alarms"].sum()
+        ),
+        "false_alarm_experiment_count": int(
+            method_results["false_alarms"].gt(0).sum()
+        ),
+    }
 
 print("\nMLP 조기경보 성능")
 print(
@@ -609,6 +658,13 @@ print(
 print(f"경보 기준 Recall: {recall:.4f}")
 print(f"경보 기준 Precision: {precision:.4f}")
 print(f"경보 기준 F1-score: {f1:.4f}")
+for method_name, method_metrics in classification_by_method.items():
+    print(
+        f"{method_name}: "
+        f"Recall {method_metrics['recall']:.4f}, "
+        f"Precision {method_metrics['precision']:.4f}, "
+        f"F1-score {method_metrics['f1']:.4f}"
+    )
 print(
     "사전 탐지 성공: "
     f"{early_detection_success_count}/"
@@ -616,3 +672,17 @@ print(
 )
 print(f"경고 선행시간 중앙값: {median_lead_time:.1f}초")
 print(f"오경보 횟수: {false_alarm_count}회")
+
+print("\n실험 방식별 조기경보 성능")
+for method_name, method_metrics in early_warning_by_method.items():
+    print(
+        f"{method_name}: "
+        f"사전 탐지 {method_metrics['success_count']}/"
+        f"{method_metrics['total_count']}개, "
+        f"선행시간 중앙값 "
+        f"{method_metrics['median_lead_time']:.1f}초, "
+        f"오경보 {method_metrics['false_alarm_count']}회, "
+        f"오경보 실험 "
+        f"{method_metrics['false_alarm_experiment_count']}/"
+        f"{method_metrics['total_count']}개"
+    )
