@@ -60,13 +60,6 @@ stage5_time = (
     .rename("stage5_time")
 )
 
-print("\n실험별 최초 5단계 이상 진입 시각:")
-print(stage5_time.head())
-
-print("\n5단계 이상 진입 시각이 있는 실험 개수:")
-print(len(stage5_time))
-
-
 # 5단계 이상 진입 시각이 있는 실험만 남기기 + 진입 시각 추가
 model_df = df.merge(
     stage5_time,
@@ -74,36 +67,15 @@ model_df = df.merge(
     how="inner",
 )
 
-print("\n모델 데이터의 실험 개수:")
-print(model_df["exp_id"].nunique())
-
-
 # 각 측정 시점에서 5단계 이상 진입까지 남은 시간 계산
 model_df["seconds_to_stage5"] = (
     model_df["stage5_time"] - model_df["rel_time"]
 )
 
-print("\n5단계 이상 진입까지 남은 시간이 추가된 데이터:")
-print(
-    model_df[
-        [
-            "exp_id",       # 실험id
-            "rel_time",     # 실험 경과 시간
-            "tr_stage",     # 현재 열폭주 단계
-            "stage5_time",  # 최초 5단계 이상 진입 시간
-            "seconds_to_stage5",    # 5단계 이상 진입까지 남은 시간
-        ]
-    ].head()
-)
-
-
 # 최초 5단계 이상 진입 전 데이터만 사용
 model_df = model_df[
     model_df["seconds_to_stage5"] > 0       # 5단계 이상 진입 이전만 필터링
 ].copy()
-
-print("\n5단계 이상 진입 전 모델 데이터 개수:")
-print(len(model_df))
 
 # 윈도우 피처 계산을 위해 실험별 시간순으로 정렬
 model_df = model_df.sort_values(
@@ -169,10 +141,6 @@ model_df["target"] = (
     model_df["seconds_to_stage5"] <= HORIZON_SECONDS
 ).astype(int)
 
-print("\n정답 라벨별 데이터 개수:")
-print(model_df["target"].value_counts().sort_index())
-
-
 # 모델 입력, 정답, 실험 그룹 분리
 X = model_df[FEATURE_COLUMNS]
 y = model_df["target"]
@@ -180,16 +148,6 @@ groups = model_df["exp_id"]
 
 # 모든 행을 정상(0)으로 예측했을 때의 비교 기준 정확도
 always_normal_accuracy = 1 - y.mean()
-
-print("\n입력 데이터 X 크기:")
-print(X.shape)
-
-print("\n정답 데이터 y 크기:")
-print(y.shape)
-
-print("\n실험 그룹 개수:")
-print(groups.nunique())
-
 
 # 실험 ID 단위로 학습 데이터와 테스트 데이터 분리
 group_split = GroupShuffleSplit(
@@ -211,22 +169,11 @@ X_test = X.iloc[test_index]     # 테스트용 입력 데이터
 y_train = y.iloc[train_index]   # 학습 정답
 y_test = y.iloc[test_index]     # 테스트 정답
 
-print("\n학습/테스트 입력 데이터 크기:")
-print(X_train.shape, X_test.shape)
-
-
 # 센서 데이터 표준화
 scaler = StandardScaler()
 
 X_train_scaled = scaler.fit_transform(X_train)  # 센서별 평균과 표준편차 계산 후 표준화
 X_test_scaled = scaler.transform(X_test)        # 학습 데이터에서 계산한 동일한 기준으로 테스트 데이터 표준화
-
-print("\n표준화 후 학습 데이터 평균과 표준편차:")
-print(
-    f"{X_train_scaled.mean():.4f}",
-    f"{X_train_scaled.std():.4f}",
-)
-
 
 # MLP 분류 모델 생성
 mlp_classifier = MLPClassifier(
@@ -251,9 +198,6 @@ mlp_classifier.fit(
     sample_weight=train_sample_weights,
 )
 
-print("MLP 학습 반복 횟수:", mlp_classifier.n_iter_)
-
-
 # 테스트 데이터의 위험 여부와 위험 확률 예측
 y_pred = mlp_classifier.predict(
     X_test_scaled
@@ -262,14 +206,6 @@ y_pred = mlp_classifier.predict(
 y_risk_probability = mlp_classifier.predict_proba(
     X_test_scaled
 )[:, 1]
-
-print("\n테스트 데이터 예측")
-print(
-    "예측값/위험 확률 개수:",
-    len(y_pred),
-    len(y_risk_probability),
-)
-
 
 # 테스트 데이터 정확도(Accuracy)와 손실값(Log Loss) 계산
 test_accuracy = accuracy_score(
@@ -418,24 +354,6 @@ cv_accuracy_series = pd.Series(cv_accuracies)
 cv_log_loss_series = pd.Series(cv_log_losses)
 cv_pr_auc_series = pd.Series(cv_pr_aucs)
 
-print("\nMLP 5분할 교차검증 결과")
-print("은닉층 구조:", HIDDEN_LAYER_SIZES)
-print("초기 학습률:", LEARNING_RATE_INIT)
-print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
-print(
-    "정확도 표준편차: "
-    f"{cv_accuracy_series.std(ddof=1):.4f}"
-)
-print(f"평균 Log Loss: {cv_log_loss_series.mean():.4f}")
-print(
-    "Log Loss 표준편차: "
-    f"{cv_log_loss_series.std(ddof=1):.4f}"
-)
-print(f"평균 PR-AUC: {cv_pr_auc_series.mean():.4f}")
-print(
-    "PR-AUC 표준편차: "
-    f"{cv_pr_auc_series.std(ddof=1):.4f}"
-)
 # 교차검증 확률이 모든 행에 저장됐는지 확인
 if cv_proba.isna().any():
     raise ValueError("교차검증 예측 확률이 없는 행이 있습니다.")
@@ -524,16 +442,6 @@ for method_value, method_name in ((1, "가열"), (2, "과충전")):
         ),
     }
 
-print("\nMLP 경보 기준 분류 성능")
-print(
-    f"경보 조건: 위험 확률 {ALARM_THRESHOLD:.1f} 이상 "
-    f"{ALARM_CONSECUTIVE_SECONDS}초 연속"
-)
-print(f"Recall: {recall:.4f}")
-print(f"Precision: {precision:.4f}")
-print(f"F1-score: {f1:.4f}")
-
-
 # 실험별 사전 탐지 성공, 선행시간, 오경보 횟수 계산
 exp_results = []
 
@@ -615,21 +523,6 @@ for method_value, method_name in ((1, "가열"), (2, "과충전")):
         ),
     }
 
-print("\nMLP 조기경보 성능")
-print(
-    "사전 탐지 성공: "
-    f"{early_detection_success_count}/"
-    f"{early_detection_total_count}개 실험"
-)
-print(f"경고 선행시간 중앙값: {median_lead_time:.1f}초")
-print(f"오경보 횟수: {false_alarm_count}회")
-print(
-    "오경보가 발생한 실험: "
-    f"{false_alarm_experiment_count}/"
-    f"{early_detection_total_count}개"
-)
-
-
 # 최종 결과 요약
 print("\n\n※ MLP 결과 요약")
 print(f"위험 구간 기준: 5단계 이상 진입 전 {HORIZON_SECONDS}초")
@@ -640,7 +533,7 @@ print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
 print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
 print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
 
-print(f"전체 입력 피처: {len(FEATURE_COLUMNS)}개")  # 센서 16개 x 시간 구간 3개 x 계산값 3개
+print(f"전체 입력 피처: {len(FEATURE_COLUMNS)}개")  # 원본 16개 + 윈도우 피처 144개
 print(f"위험 데이터 비율: {y.mean():.2%}")
 print("-" * 50)
 print(f"항상 정상 기준 정확도: {always_normal_accuracy:.4f}")
@@ -687,6 +580,11 @@ print(
 )
 print(f"경고 선행시간 중앙값: {median_lead_time:.1f}초")
 print(f"오경보 횟수: {false_alarm_count}회")
+print(
+    "오경보가 발생한 실험: "
+    f"{false_alarm_experiment_count}/"
+    f"{early_detection_total_count}개"
+)
 
 print("\n실험 방식별 조기경보 성능")
 for method_name, method_metrics in early_warning_by_method.items():
