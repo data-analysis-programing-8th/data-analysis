@@ -224,6 +224,9 @@ X = model_df[FEATURE_COLUMNS]    # 모델 입력(원본 센서 + 윈도우 피�
 y = model_df["target"]          # 정답 라벨
 groups = model_df["exp_id"]      # 실험 그룹
 
+# 모든 행을 정상(0)으로 예측했을 때의 비교 기준 정확도
+always_normal_accuracy = 1 - y.mean()
+
 print("\n입력 데이터 X 크기:")
 print(X.shape)
 
@@ -675,6 +678,7 @@ print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
 print(f"전체 입력 피처: {len(FEATURE_COLUMNS)}개")
 print(f"위험 데이터 비율: {y.mean():.2%}")
 print("-" * 50)
+print(f"항상 정상 기준 정확도: {always_normal_accuracy:.4f}")
 print(f"단일 분할 정확도: {test_accuracy:.4f}")
 print(f"단일 분할 Log Loss: {test_log_loss:.4f}")
 print(f"교차검증 평균 정확도: {cv_accuracy_series.mean():.4f}")
