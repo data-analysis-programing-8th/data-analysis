@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 
 DATA_PATH = "battery_labels.csv"
 HORIZON_SECONDS = 60     # 위험 구간 시간(초)
+WINDOW_SECONDS = [10, 30, 60]  # 센서 흐름을 계산할 최근 시간 구간(초)
 
 # 최적의 성능을 나타낼 MLP 설정 (직접 여러번 비교)
 # 현재 단일 분할에서 성능이 가장 좋았던 설정
@@ -102,6 +103,63 @@ model_df = model_df[
 print("\n5단계 이상 진입 전 모델 데이터 개수:")
 print(len(model_df))
 
+# 윈도우 피처 계산을 위해 실험별 시간순으로 정렬
+model_df = model_df.sort_values(
+    ["exp_id", "rel_time"]
+).reset_index(drop=True)
+
+# 최근 10·30·60초의 변화량, 평균, 표준편차 생성
+window_features = {}
+
+for sensor in SENSOR_COLUMNS:
+    sensor_by_experiment = model_df.groupby("exp_id")[sensor]
+
+    # 실험 초반에 과거 값이 없을 때 사용할 실험별 첫 센서값
+    first_sensor_value = sensor_by_experiment.transform("first")
+
+    for window in WINDOW_SECONDS:
+        # 현재 센서값과 window초 전 센서값의 차이
+        past_sensor_value = (
+            sensor_by_experiment
+            .shift(window)
+            .fillna(first_sensor_value)
+        )
+        window_features[f"{sensor}_diff{window}"] = (
+            model_df[sensor] - past_sensor_value
+        )
+
+        # 현재 시점을 포함한 최근 window초 평균
+        window_features[f"{sensor}_mean{window}"] = (
+            sensor_by_experiment.transform(
+                lambda values: values.rolling(
+                    window,
+                    min_periods=1,
+                ).mean()
+            )
+        )
+
+        # 현재 시점을 포함한 최근 window초 표준편차
+        window_features[f"{sensor}_std{window}"] = (
+            sensor_by_experiment.transform(
+                lambda values: values.rolling(
+                    window,
+                    min_periods=1,
+                ).std()
+            ).fillna(0)
+        )
+
+# 생성한 윈도우 피처를 원본 데이터 오른쪽에 한 번에 추가
+model_df = pd.concat(
+    [
+        model_df,
+        pd.DataFrame(window_features),
+    ],
+    axis=1,
+)
+
+# 원본 센서 16개와 윈도우 피처 144개를 모델 입력으로 사용
+FEATURE_COLUMNS = SENSOR_COLUMNS + list(window_features.keys())
+
 
 # 향후 60초 이내에 5단계 이상으로 진입하는지 정답 라벨 생성
 # 5단계 이상 진입 전 중 HORIZON_SECONDS 시간 내 위험 여부(1 or 0)
@@ -114,7 +172,7 @@ print(model_df["target"].value_counts().sort_index())
 
 
 # 모델 입력, 정답, 실험 그룹 분리
-X = model_df[SENSOR_COLUMNS]
+X = model_df[FEATURE_COLUMNS]
 y = model_df["target"]
 groups = model_df["exp_id"]
 
