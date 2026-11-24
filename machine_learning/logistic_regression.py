@@ -3,6 +3,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     f1_score,
     log_loss,
     precision_score,
@@ -309,6 +310,9 @@ print(f"{X_train_scaled.to_numpy().std():.6f}")
 # 로지스틱 회귀 모델 생성/학습
 logistic_model = LogisticRegression(
     max_iter=1000,          # 최대 반복 횟수
+    l1_ratio=0.0,           # L2 규제로 회귀계수 과적합 방지
+    C=1.0,                  # L2 규제 강도
+    class_weight="balanced",  # 위험 데이터에 더 큰 가중치 적용
 )
 # 로지스틱 학습
 logistic_model.fit(
@@ -369,6 +373,7 @@ stratify_labels = model_df.loc[
 
 cv_accuracies = []  # 5회차 정확도
 cv_log_losses = []  # 5회차 Log Loss
+cv_pr_aucs = []      # 5회차 PR-AUC
 
 
 # 각 행이 검증 데이터였을 때 예측된 위험 확률 저장
@@ -408,6 +413,9 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
     # 현재 회차의 로지스틱 회귀 모델 생성 및 학습
     fold_model = LogisticRegression(
         max_iter=1000,
+        l1_ratio=0.0,
+        C=1.0,
+        class_weight="balanced",
     )
 
     fold_model.fit(
@@ -440,8 +448,14 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         fold_risk_probability,
     )
 
+    fold_pr_auc = average_precision_score(
+        y_fold_validation,
+        fold_risk_probability,
+    )
+
     cv_accuracies.append(fold_accuracy)
     cv_log_losses.append(fold_log_loss)
+    cv_pr_aucs.append(fold_pr_auc)
 
     # 같은 실험이 학습과 검증에 중복됐는지 확인
     fold_train_groups = set(
@@ -461,6 +475,7 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         f"{fold_number}회차 - "
         f"정확도: {fold_accuracy:.4f}, "
         f"Log Loss: {fold_log_loss:.4f}, "
+        f"PR-AUC: {fold_pr_auc:.4f}, "
         f"중복 실험: {len(overlap_groups)}개"
     )
 
@@ -475,6 +490,7 @@ print(cv_proba.notna().sum())
 # 평균과 표준편차 계산을 위해 Series로 변환
 cv_accuracy_series = pd.Series(cv_accuracies)
 cv_log_loss_series = pd.Series(cv_log_losses)
+cv_pr_auc_series = pd.Series(cv_pr_aucs)
 
 print("\n로지스틱 회귀 5분할 교차검증 결과")
 print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
@@ -487,6 +503,11 @@ print(
     "Log Loss 표준편차: "
     f"{cv_log_loss_series.std(ddof=1):.4f}"
 )
+print(f"평균 PR-AUC: {cv_pr_auc_series.mean():.4f}")
+print(
+    "PR-AUC 표준편차: "
+    f"{cv_pr_auc_series.std(ddof=1):.4f}"
+)
 
 # 경보 계산에 필요한 실험 ID, 시간, 정답과 예측 확률을 하나로 정리
 alarm_df = model_df.loc[
@@ -496,6 +517,7 @@ alarm_df = model_df.loc[
         "rel_time",     # 실험 경과 시간
         "stage5_time",  # 최초 5단계 이상 진입 시각
         "target",       # 실제 정답
+        "tr_method",    # 가열(1)·과충전(2) 결과 비교용
     ],
 ].copy()
 
@@ -580,6 +602,30 @@ f1 = f1_score(
     zero_division=0,
 )
 
+# 가열·과충전 방식별 분류 성능 계산
+classification_by_method = {}
+
+for method_value, method_name in ((1, "가열"), (2, "과충전")):
+    method_rows = alarm_df["tr_method"].eq(method_value)
+
+    classification_by_method[method_name] = {
+        "recall": recall_score(
+            alarm_df.loc[method_rows, "target"],
+            alarm_df.loc[method_rows, "alarm"],
+            zero_division=0,
+        ),
+        "precision": precision_score(
+            alarm_df.loc[method_rows, "target"],
+            alarm_df.loc[method_rows, "alarm"],
+            zero_division=0,
+        ),
+        "f1": f1_score(
+            alarm_df.loc[method_rows, "target"],
+            alarm_df.loc[method_rows, "alarm"],
+            zero_division=0,
+        ),
+    }
+
 
 # 실험별 사전 탐지 성공률, 경고 선행 시간, 오경보 횟수
 exp_results = []
@@ -623,6 +669,7 @@ for exp_id, experiment in alarm_df.groupby("exp_id"):
     exp_results.append(
         {
             "exp_id": exp_id,               # 실험별 id
+            "tr_method": experiment["tr_method"].iloc[0],
             "success": detection_success,   # 탐지 성공 여부
             "lead_time": lead_time,         # 경고 선행시간 계산
             "false_alarms": int(false_alarm_starts.sum()),  # 오경보 횟수
@@ -667,6 +714,29 @@ false_alarm_experiment_count = int(
     exp_results["false_alarms"].gt(0).sum()
 )
 
+# 가열·과충전 방식별 조기경보 성능 계산
+early_warning_by_method = {}
+
+for method_value, method_name in ((1, "가열"), (2, "과충전")):
+    method_results = exp_results[
+        exp_results["tr_method"].eq(method_value)
+    ]
+
+    early_warning_by_method[method_name] = {
+        "success_count": int(method_results["success"].sum()),
+        "total_count": len(method_results),
+        "median_lead_time": method_results.loc[
+            method_results["success"],
+            "lead_time",
+        ].median(),
+        "false_alarm_count": int(
+            method_results["false_alarms"].sum()
+        ),
+        "false_alarm_experiment_count": int(
+            method_results["false_alarms"].gt(0).sum()
+        ),
+    }
+
 
 # 결과 요약
 print("\n\n")
@@ -685,11 +755,20 @@ print(f"교차검증 평균 정확도: {cv_accuracy_series.mean():.4f}")
 print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=1):.4f}")
 print(f"교차검증 평균 Log Loss: {cv_log_loss_series.mean():.4f}")
 print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=1):.4f}")
+print(f"교차검증 평균 PR-AUC: {cv_pr_auc_series.mean():.4f}")
+print(f"교차검증 PR-AUC 표준편차: {cv_pr_auc_series.std(ddof=1):.4f}")
 print("-" * 50)
 print("\n경보 기준 분류 성능")
 print(f"Recall: {recall:.4f}")
 print(f"Precision: {precision:.4f}")
 print(f"F1-score: {f1:.4f}")
+for method_name, method_metrics in classification_by_method.items():
+    print(
+        f"{method_name}: "
+        f"Recall {method_metrics['recall']:.4f}, "
+        f"Precision {method_metrics['precision']:.4f}, "
+        f"F1-score {method_metrics['f1']:.4f}"
+    )
 print("-" * 50)
 print("실험별 사전 탐지 성공률")
 print(
@@ -713,3 +792,17 @@ print(
     f"{false_alarm_experiment_count}/"
     f"{early_detection_total_count}개"
 )
+
+print("\n실험 방식별 조기경보 성능")
+for method_name, method_metrics in early_warning_by_method.items():
+    print(
+        f"{method_name}: "
+        f"사전 탐지 {method_metrics['success_count']}/"
+        f"{method_metrics['total_count']}개, "
+        f"선행시간 중앙값 "
+        f"{method_metrics['median_lead_time']:.1f}초, "
+        f"오경보 {method_metrics['false_alarm_count']}회, "
+        f"오경보 실험 "
+        f"{method_metrics['false_alarm_experiment_count']}/"
+        f"{method_metrics['total_count']}개"
+    )
