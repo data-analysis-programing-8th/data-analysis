@@ -392,11 +392,24 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
     cv_log_losses.append(fold_log_loss)
     cv_pr_aucs.append(fold_pr_auc)
 
+    # 같은 실험이 학습과 검증에 중복됐는지 확인
+    fold_train_groups = set(
+        groups.iloc[fold_train_index].unique()
+    )
+    fold_validation_groups = set(
+        groups.iloc[fold_validation_index].unique()
+    )
+    overlap_groups = fold_train_groups & fold_validation_groups
+
+    if overlap_groups:
+        raise ValueError("학습과 검증에 같은 실험 ID가 포함됐습니다.")
+
     print(
         f"{fold_number}회차 - "
         f"정확도: {fold_accuracy:.4f}, "
         f"Log Loss: {fold_log_loss:.4f}, "
-        f"PR-AUC: {fold_pr_auc:.4f}"
+        f"PR-AUC: {fold_pr_auc:.4f}, "
+        f"중복 실험: {len(overlap_groups)}개"
     )
 
 
