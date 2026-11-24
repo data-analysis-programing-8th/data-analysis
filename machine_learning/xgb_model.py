@@ -8,7 +8,7 @@ from xgboost import XGBClassifier
 DATA_PATH = "20.배터리 열폭주 제어 멀티모달 데이터/output/battery_labels.csv"   # preprocessing.py가 만든 병합 CSV
 
 T = 60                     # 위험 구간: 5단계 진입 전 T초 (팀 기준 60초)
-WINDOWS = [5, 10, 30, 60, 120, 300]  # 윈도우 피처를 계산할 최근 구간 길이(초)
+WINDOWS = [10, 30, 60]     # 윈도우 피처를 계산할 최근 구간 길이(초)
 THRESHOLD = 0.5            # 예측 확률이 이 값 이상이면 '위험'으로 판정
 K_CONSEC = 5               # 위험 판정이 K초 연속 이어지면 경보
 N_SPLITS = 5               # 교차검증 분할 수
