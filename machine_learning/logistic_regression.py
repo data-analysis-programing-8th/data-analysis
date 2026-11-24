@@ -523,8 +523,7 @@ print(
 )
 
 
-# [실험별 사전 탐지 성공률] 구현
-# 5단계 이상 진입 전 60초 위험 구간에서 경보가 한 번이라도 발생했으면 해당 실험 탐지 성공
+# 실험별 사전 탐지 성공률, 경고 선행 시간, 오경보 횟수
 exp_results = []
 
 for exp_id, experiment in alarm_df.groupby("exp_id"):
@@ -532,6 +531,18 @@ for exp_id, experiment in alarm_df.groupby("exp_id"):
     risk_alarm = (
         experiment["alarm"]
         & experiment["target"].eq(1)
+    )
+
+    # 정상 구간에서 발생한 경보만 선택
+    normal_alarm = (
+        experiment["alarm"]
+        & experiment["target"].eq(0)
+    ).astype(int)
+
+    # 경보가 0에서 1로 바뀌는 시점을 오경보 시작으로 계산
+    false_alarm_starts = (
+        normal_alarm.eq(1)
+        & normal_alarm.shift(fill_value=0).eq(0)
     )
 
     # 위험 구간에 경보가 하나라도 있으면 탐지 성공
@@ -556,12 +567,15 @@ for exp_id, experiment in alarm_df.groupby("exp_id"):
             "exp_id": exp_id,               # 실험별 id
             "success": detection_success,   # 탐지 성공 여부
             "lead_time": lead_time,         # 경고 선행시간 계산
+            "false_alarms": int(false_alarm_starts.sum()),  # 오경보 횟수
         }
     )
 
 # 실험별 결과를 DataFrame으로 변환
 exp_results = pd.DataFrame(exp_results)
 
+# [실험별 사전 탐지 성공률] 구현
+# 5단계 이상 진입 전 60초 위험 구간에서 경보가 한 번이라도 발생했으면 해당 실험 탐지 성공
 early_detection_success_count = int(
     exp_results["success"].sum()
 )
@@ -582,6 +596,18 @@ successful_lead_times = exp_results.loc[
 
 median_lead_time = successful_lead_times.median()
 
+
+# [오경보 횟수] 계산
+# 60초 위험 구간보다 앞선 정상 구간에서 경보가 발생한 경우
+# 전체 실험에서 발생한 오경보 횟수
+false_alarm_count = int(
+    exp_results["false_alarms"].sum()
+)
+
+# 오경보가 한 번 이상 발생한 실험 개수
+false_alarm_experiment_count = int(
+    exp_results["false_alarms"].gt(0).sum()
+)
 
 
 # 결과 요약
@@ -614,4 +640,11 @@ print("\n경고 선행시간")
 print(
     "경고 선행시간 중앙값: "
     f"{median_lead_time:.1f}초"
+)
+print("\n오경보 성능")
+print(f"오경보 횟수: {false_alarm_count}회")
+print(
+    "오경보가 발생한 실험: "
+    f"{false_alarm_experiment_count}/"
+    f"{early_detection_total_count}개"
 )
