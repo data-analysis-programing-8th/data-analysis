@@ -25,9 +25,9 @@ ALARM_THRESHOLD = 0.5
 ALARM_CONSECUTIVE_SECONDS = 5
 
 
-SENSOR_COLUMNS = [       # 센서 열 목록(총 18개)
+# meas_a는 모든 값이 0이고, indu_t는 과충전 실험에서 모두 결측이므로 제외
+SENSOR_COLUMNS = [       # 센서 열 목록(총 16개)
     "meas_v",
-    "meas_a",
     "meas_t1",
     "meas_t2",
     "meas_p",
@@ -41,7 +41,6 @@ SENSOR_COLUMNS = [       # 센서 열 목록(총 18개)
     "meas_no",
     "meas_no2",
     "meas_so2",
-    "indu_t",
     "atmp_t",
     "thermal_t",
 ]
