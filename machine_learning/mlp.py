@@ -1,5 +1,4 @@
 import pandas as pd
-from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -153,26 +152,11 @@ print("\n학습/테스트 입력 데이터 크기:")
 print(X_train.shape, X_test.shape)
 
 
-# 학습 데이터의 중앙값으로 결측값 처리
-imputer = SimpleImputer(
-    strategy="median",
-)
-
-X_train_imputed = imputer.fit_transform(X_train)    # 학습 데이터의 중앙값 계산 및 결측값 처리
-X_test_imputed = imputer.transform(X_test)          # 같은 중앙값으로 테스트 데이터 처리
-
-print("\n결측값 처리 후 남은 결측값:")
-print(
-    pd.isna(X_train_imputed).sum(),
-    pd.isna(X_test_imputed).sum(),
-)
-
-
 # 센서 데이터 표준화
 scaler = StandardScaler()
 
-X_train_scaled = scaler.fit_transform(X_train_imputed)  # 센서별 평균과 표준편차 계산 후 표준화
-X_test_scaled = scaler.transform(X_test_imputed)        # 학습 데이터에서 계산한 동일한 기준으로 테스트 데이터 표준화
+X_train_scaled = scaler.fit_transform(X_train)  # 센서별 평균과 표준편차 계산 후 표준화
+X_test_scaled = scaler.transform(X_test)        # 학습 데이터에서 계산한 동일한 기준으로 테스트 데이터 표준화
 
 print("\n표준화 후 학습 데이터 평균과 표준편차:")
 print(
@@ -274,26 +258,14 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
     y_fold_train = y.iloc[fold_train_index]
     y_fold_validation = y.iloc[fold_validation_index]
 
-    # 학습 데이터의 중앙값으로 결측값 처리
-    fold_imputer = SimpleImputer(
-        strategy="median",
-    )
-
-    X_fold_train_imputed = fold_imputer.fit_transform(
-        X_fold_train
-    )
-    X_fold_validation_imputed = fold_imputer.transform(
-        X_fold_validation
-    )
-
     # 학습 데이터 기준으로 표준화
     fold_scaler = StandardScaler()
 
     X_fold_train_scaled = fold_scaler.fit_transform(
-        X_fold_train_imputed
+        X_fold_train
     )
     X_fold_validation_scaled = fold_scaler.transform(
-        X_fold_validation_imputed
+        X_fold_validation
     )
 
     # 현재 설정으로 MLP 생성 및 학습
