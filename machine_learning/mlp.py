@@ -639,6 +639,8 @@ print(f"초기 learning_rate: {LEARNING_RATE_INIT}")
 print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
 print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
 print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
+
+print(f"전체 입력 피처: {len(FEATURE_COLUMNS)}개")  # 센서 16개 x 시간 구간 3개 x 계산값 3개
 print(f"위험 데이터 비율: {y.mean():.2%}")
 print("-" * 50)
 print(f"항상 정상 기준 정확도: {always_normal_accuracy:.4f}")
