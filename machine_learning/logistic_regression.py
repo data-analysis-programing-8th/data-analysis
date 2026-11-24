@@ -2,7 +2,13 @@ import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, log_loss
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    log_loss,
+    precision_score,
+    recall_score,
+)
 
 from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold   # 모델 검증용
 
@@ -522,6 +528,26 @@ print(
     ].nunique(),
 )
 
+# 최종 경보를 기준으로 분류 성능 계산
+# [Recall], [Precision], [f1-score]
+recall = recall_score(
+    alarm_df["target"],
+    alarm_df["alarm"],
+    zero_division=0,
+)
+
+precision = precision_score(
+    alarm_df["target"],
+    alarm_df["alarm"],
+    zero_division=0,
+)
+
+f1 = f1_score(
+    alarm_df["target"],
+    alarm_df["alarm"],
+    zero_division=0,
+)
+
 
 # 실험별 사전 탐지 성공률, 경고 선행 시간, 오경보 횟수
 exp_results = []
@@ -625,6 +651,11 @@ print(f"교차검증 평균 정확도: {cv_accuracy_series.mean():.4f}")
 print(f"교차검증 정확도 표준편차: {cv_accuracy_series.std(ddof=1):.4f}")
 print(f"교차검증 평균 Log Loss: {cv_log_loss_series.mean():.4f}")
 print(f"교차검증 Log Loss 표준편차: {cv_log_loss_series.std(ddof=1):.4f}")
+print("-" * 50)
+print("\n경보 기준 분류 성능")
+print(f"Recall: {recall:.4f}")
+print(f"Precision: {precision:.4f}")
+print(f"F1-score: {f1:.4f}")
 print("-" * 50)
 print("실험별 사전 탐지 성공률")
 print(
