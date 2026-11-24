@@ -18,9 +18,10 @@ HORIZON_SECONDS = 60                # 위험 구간 시간(초)
 ALARM_THRESHOLD = 0.5               # 위험으로 판정 할 확률 기준
 ALARM_CONSECUTIVE_SECONDS = 5       # 경보에 필요한 연속 위험 판정 시간(초)
 
-SENSOR_COLUMNS = [                  # 센서 열 목록(총 18개)
-    "meas_v",
-    "meas_a",
+
+# meas_a는 상수, indu_t는 과충전 실험에서 전부 결측이므로 제외
+SENSOR_COLUMNS = [                  # 센서 열 목록(총 16개)
+    "meas_v",                       # meas_a, indu_t 제거
     "meas_t1",
     "meas_t2",
     "meas_p",
@@ -34,7 +35,6 @@ SENSOR_COLUMNS = [                  # 센서 열 목록(총 18개)
     "meas_no",
     "meas_no2",
     "meas_so2",
-    "indu_t",
     "atmp_t",
     "thermal_t",
 ]
