@@ -14,13 +14,13 @@ from sklearn.utils.class_weight import compute_sample_weight
 
 
 DATA_PATH = "battery_labels.csv"
-HORIZON_SECONDS = 60     # 위험 구간 시간(초)
-WINDOW_SECONDS = [10, 30, 60]  # 센서 흐름을 계산할 최근 시간 구간(초)
+HORIZON_SECONDS = 60            # 위험 구간 시간(초)
+WINDOW_SECONDS = [10, 30, 60]   # 센서 흐름을 계산할 최근 시간 구간(초)
 
 # 최적의 성능을 나타낼 MLP 설정 (직접 여러번 비교)
 # 현재 단일 분할에서 성능이 가장 좋았던 설정
-HIDDEN_LAYER_SIZES = (64, 64)
-LEARNING_RATE_INIT = 0.001
+HIDDEN_LAYER_SIZES = (256, )
+LEARNING_RATE_INIT = 0.0005
 
 # 위험 확률이 0.5 이상인 상태가 5초 연속이면 경보를 발생시킴
 ALARM_THRESHOLD = 0.5
