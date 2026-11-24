@@ -41,22 +41,6 @@ SENSOR_COLUMNS = [                  # 센서 열 목록(총 16개)
 
 df = pd.read_csv(DATA_PATH)
 
-# 데이터 확인
-print("데이터 크기:", df.shape)     # (218389, 29)
-
-print("\n실험 개수:", df["exp_id"].nunique())   # 97
-
-print("\n열폭주 단계별 데이터 개수:")
-print(df["tr_stage"].value_counts().sort_index())
-
-print("\n결측값이 있는 열:")
-missing_values = df.isna().sum()    # 결측값 = NaN 또는 빈값
-print(missing_values[missing_values > 0])
-
-print("\n데이터 일부:")
-print(df.head())
-
-
 # 실험별 최초 5단계 이상 진입 시각
 stage5_time = (
     df[df["tr_stage"] >= 5]           # tr_stage가 5이상인 행 (열폭주 5, 6단계)
@@ -65,10 +49,6 @@ stage5_time = (
     .rename("stage5_time")            # 데이터 이름 설정
 )
 
-print("\n실험 별 최초 5단계 이상 진입\n", stage5_time.head())
-print("\n5단계 이상 진입시각이 기록된 실험 개수: ", len(stage5_time))
-
-
 # 각 행에 최초 5단계 이상 진입 시각 추가
 model_df = df.merge(
     stage5_time,
@@ -76,59 +56,15 @@ model_df = df.merge(
     how="inner",
 )
 
-print("\n5단계 이상 진입 시각 추가 후 데이터 크기:\n", model_df.shape)
-
-print("\n5단계 이상 진입 시각 추가 후 실험 개수:")
-print(model_df["exp_id"].nunique())
-
-print("\n5단계 이상 진입 시각이 추가된 데이터:")
-print(
-    model_df[
-        ["exp_id", "rel_time", "tr_stage", "stage5_time"]
-    ].head()
-)
-
-
 # 5단계 이상 진입까지 남은 시간 계산
 model_df["seconds_to_stage5"] = (
     model_df["stage5_time"] - model_df["rel_time"]
 )
 
-print("\n5단계 이상 진입까지 남은 시간이 추가된 데이터:")
-print(
-    model_df[
-        [
-            "exp_id",
-            "rel_time",
-            "tr_stage",
-            "stage5_time",
-            "seconds_to_stage5",
-        ]
-    ].head()
-)
-
-print("\n최초 5단계 이상 진입 행 개수:")
-print((model_df["seconds_to_stage5"] == 0).sum())
-
-
 # 5단계 이상 진입 시점과 진입 이후 데이터 제외
-rows_before_filter = len(model_df)
-
 model_df = model_df[
     model_df["seconds_to_stage5"] > 0    # 5단계 이상 진입전만 필터링 (양수 시간)
 ].copy()
-
-excluded_rows = rows_before_filter - len(model_df)
-print("\n5단계 이상 진입 이후 제외된 행 개수:\n", excluded_rows)
-
-print("\n5단계 이상 진입 이후 제외 후 데이터 크기:\n", model_df.shape)
-
-print("\n0초 이하 데이터 개수:")
-print((model_df["seconds_to_stage5"] <= 0).sum())
-
-print("\n5단계 이상 진입까지 남은 시간의 최솟값:")
-print(model_df["seconds_to_stage5"].min())
-
 
 # 윈도우 피처 계산을 위해 실험별 시간순으로 정렬
 model_df = model_df.sort_values(
@@ -190,12 +126,6 @@ FEATURE_COLUMNS = (
     + list(window_features.keys())
 )
 
-print("\n기본 센서 개수:", len(SENSOR_COLUMNS))
-print("윈도우 피처 개수:", len(window_features))
-print("전체 입력 피처 개수:", len(FEATURE_COLUMNS))
-
-
-
 # 향후 HORIZON_SECONDS초 이내 5단계 이상 진입 여부
 
 # 모델이 예측해야할 정답 라벨 생성
@@ -204,22 +134,6 @@ model_df["target"] = (
     model_df["seconds_to_stage5"] <= HORIZON_SECONDS
 ).astype(int)           # True/False -> 1/0 변환
 
-print("\n정답 라벨별 데이터 개수:")  # 0, 1 개수 확인
-print(model_df["target"].value_counts().sort_index())
-
-print("\n정답별 5단계 이상 진입까지 남은 시간:")     # 0, 1 각각의 5단계까지 남은 시각
-print(
-    model_df.groupby("target")["seconds_to_stage5"]
-    .agg(["min", "max"])
-)
-
-print("\n위험 데이터 비율:")
-print(f"{model_df['target'].mean():.2%}")
-
-print("\n정답 열 추가 후 데이터 크기:")
-print(model_df.shape)
-
-
 # 모델 입력, 정답, 실험 그룹 분리
 X = model_df[FEATURE_COLUMNS]    # 모델 입력(원본 센서 + 윈도우 피처)
 y = model_df["target"]          # 정답 라벨
@@ -227,23 +141,6 @@ groups = model_df["exp_id"]      # 실험 그룹
 
 # 모든 행을 정상(0)으로 예측했을 때의 비교 기준 정확도
 always_normal_accuracy = 1 - y.mean()
-
-print("\n입력 데이터 X 크기:")
-print(X.shape)
-
-print("\n정답 데이터 y 크기:")
-print(y.shape)
-
-print("\n교차검증 그룹의 실험 개수:")
-print(groups.nunique())
-
-print("\n입력 센서 열:")
-print(X.columns.tolist())
-
-print("\n입력 센서의 결측값:")
-sensor_missing_values = X.isna().sum()
-print(sensor_missing_values[sensor_missing_values > 0])
-
 
 # 실험 ID 단위로 학습 데이터와 테스트 데이터 분리
 group_split = GroupShuffleSplit(
@@ -255,34 +152,10 @@ group_split = GroupShuffleSplit(
 train_index, test_index = next(
     group_split.split(X, y, groups=groups)
 )
-X_train = X.iloc[train_index]   # 학습 행들 
-X_test = X.iloc[test_index]     # 테스트 행들
-y_train = y.iloc[train_index]   # 학습 열들
-y_test = y.iloc[test_index]     # 테스트 열들
-
-groups_train = groups.iloc[train_index]     # 학습 그룹
-groups_test = groups.iloc[test_index]       # 테스트 그룹
-
-# 분리 결과 테스트
-print("\n학습 입력 데이터 크기:")   # (146558, 18)
-print(X_train.shape)
-
-print("\n테스트 입력 데이터 크기:")  # (35564, 18)
-print(X_test.shape)
-
-print("\n학습 실험 개수:")          # 75
-print(groups_train.nunique())
-
-print("\n테스트 실험 개수:")        # 19
-print(groups_test.nunique())
-
-overlap_experiments = (
-    set(groups_train.unique())
-    & set(groups_test.unique())
-)
-print("\n학습과 테스트에 중복된 실험 ID:")  # 중복 확인 -> 없음
-print(overlap_experiments)
-
+X_train = X.iloc[train_index]   # 학습 입력 데이터
+X_test = X.iloc[test_index]     # 테스트 입력 데이터
+y_train = y.iloc[train_index]   # 학습 정답 데이터
+y_test = y.iloc[test_index]     # 테스트 정답 데이터
 
 # 센서 데이터 표준화
 # 센서별 평균을 0, 표준편차를 1에 가깝게 맞춤
@@ -300,13 +173,6 @@ X_test_scaled = pd.DataFrame(
     index=X_test.index,
 )
 
-print("\n표준화 후 학습 데이터 전체 평균:")
-print(f"{X_train_scaled.to_numpy().mean():.6f}")
-
-print("\n표준화 후 학습 데이터 전체 표준편차:")
-print(f"{X_train_scaled.to_numpy().std():.6f}")
-
-
 # 로지스틱 회귀 모델 생성/학습
 logistic_model = LogisticRegression(
     max_iter=1000,          # 최대 반복 횟수
@@ -320,10 +186,6 @@ logistic_model.fit(
     y_train,                # 정답 라벨
 )
 
-print("\n로지스틱 회귀 모델 학습 완료")
-print("모델 학습 반복 횟수:", logistic_model.n_iter_[0])
-
-
 # 테스트 데이터 위험 여부 확인, 위험 확률 예측
 # 예측 형태  [[정상(0) 확률], [위험(1) 확률]
 #            [정상(0) 확률], [위험(1) 확률]...]
@@ -333,12 +195,6 @@ y_pred = logistic_model.predict(X_test_scaled)      # 예측 (정상=0, 위험=1
 y_risk_probability = logistic_model.predict_proba(
     X_test_scaled
 )[:, 1]
-
-print("\n테스트 데이터 예측 완료")
-print("전체 예측 개수:", len(y_pred))
-print("위험 확률 개수:", len(y_risk_probability))
-print("위험으로 예측한 개수:", y_pred.sum())
-
 
 # 테스트 데이터 정확도, Loss 평가
 # 정확도 = 맞게 예측한 개수 / 전체 테스트 데이터 개수
@@ -352,11 +208,9 @@ test_log_loss = log_loss(   # loss 계산
     y_risk_probability,     # 모델 위험 확률
 )
 
-print("\n로지스틱 회귀 테스트 성능")
-print(f"정확도: {test_accuracy:.4f}")        # 97.5%
-print(f"Log Loss: {test_log_loss:.4f}")     # 0.0856
-
-
+print("\n로지스틱 회귀 단일 분할 결과")
+print(f"정확도: {test_accuracy:.4f}")
+print(f"Log Loss: {test_log_loss:.4f}")
 
 # 가열·과충전 비율을 유지하는 실험 ID 단위 5분할 교차검증
 stratified_group_kfold = StratifiedGroupKFold(
@@ -461,15 +315,10 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
     fold_train_groups = set(
         groups.iloc[fold_train_index].unique()
     )
-
     fold_validation_groups = set(
         groups.iloc[fold_validation_index].unique()
     )
-
-    overlap_groups = (
-        fold_train_groups
-        & fold_validation_groups
-    )
+    overlap_groups = fold_train_groups & fold_validation_groups
 
     print(
         f"{fold_number}회차 - "
@@ -483,31 +332,10 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
 if cv_proba.isna().any():
     raise ValueError("교차검증 예측 확률이 없는 행이 있습니다.")
 
-print("\n교차검증 위험 확률 저장 개수:")
-print(cv_proba.notna().sum())
-
-
 # 평균과 표준편차 계산을 위해 Series로 변환
 cv_accuracy_series = pd.Series(cv_accuracies)
 cv_log_loss_series = pd.Series(cv_log_losses)
 cv_pr_auc_series = pd.Series(cv_pr_aucs)
-
-print("\n로지스틱 회귀 5분할 교차검증 결과")
-print(f"평균 정확도: {cv_accuracy_series.mean():.4f}")
-print(
-    "정확도 표준편차: "
-    f"{cv_accuracy_series.std(ddof=1):.4f}"
-)
-print(f"평균 Log Loss: {cv_log_loss_series.mean():.4f}")
-print(
-    "Log Loss 표준편차: "
-    f"{cv_log_loss_series.std(ddof=1):.4f}"
-)
-print(f"평균 PR-AUC: {cv_pr_auc_series.mean():.4f}")
-print(
-    "PR-AUC 표준편차: "
-    f"{cv_pr_auc_series.std(ddof=1):.4f}"
-)
 
 # 경보 계산에 필요한 실험 ID, 시간, 정답과 예측 확률을 하나로 정리
 alarm_df = model_df.loc[
@@ -559,27 +387,6 @@ alarm_df["consecutive_risk_count"] = (
 alarm_df["alarm"] = (
     alarm_df["consecutive_risk_count"]
     >= ALARM_CONSECUTIVE_SECONDS
-)
-
-print("\n경보 생성 결과")
-print(
-    f"경보 조건: 위험 확률 {ALARM_THRESHOLD} 이상 "
-    f"{ALARM_CONSECUTIVE_SECONDS}초 연속"
-)
-print(
-    "위험으로 판정된 행:",
-    alarm_df["risk_prediction"].sum(),
-)
-print(
-    "최종 경보가 켜진 행:",
-    alarm_df["alarm"].sum(),
-)
-print(
-    "경보가 발생한 실험:",
-    alarm_df.loc[
-        alarm_df["alarm"],
-        "exp_id",
-    ].nunique(),
 )
 
 # 최종 경보를 기준으로 분류 성능 계산
