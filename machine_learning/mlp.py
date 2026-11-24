@@ -9,6 +9,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.class_weight import compute_sample_weight
 
 
 DATA_PATH = "battery_labels.csv"
@@ -235,9 +236,15 @@ mlp_classifier = MLPClassifier(
 )
 
 # 표준화된 학습 데이터로 모델 학습
+train_sample_weights = compute_sample_weight(
+    class_weight="balanced",
+    y=y_train,
+)
+
 mlp_classifier.fit(
     X_train_scaled,
     y_train,
+    sample_weight=train_sample_weights,
 )
 
 print("MLP 학습 반복 횟수:", mlp_classifier.n_iter_)
@@ -337,9 +344,16 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         random_state=42,
     )
 
+    # 현재 회차의 학습 데이터 비율로 위험 행에 더 큰 가중치 적용
+    fold_sample_weights = compute_sample_weight(
+        class_weight="balanced",
+        y=y_fold_train,
+    )
+
     fold_model.fit(
         X_fold_train_scaled,
         y_fold_train,
+        sample_weight=fold_sample_weights,
     )
 
     # 검증 데이터 예측
