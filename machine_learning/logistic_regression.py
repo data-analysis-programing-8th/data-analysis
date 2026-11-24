@@ -1,5 +1,4 @@
 import pandas as pd
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -281,42 +280,20 @@ print("\n학습과 테스트에 중복된 실험 ID:")  # 중복 확인 -> 없�
 print(overlap_experiments)
 
 
-# 입력 센서 결측값 처리
-imputer = SimpleImputer(strategy="median")      # 결측값=중앙값으로
-
-X_train_imputed = pd.DataFrame(         # 학습 데이터
-    imputer.fit_transform(X_train),     # 학습 데이터의 결측값 채우기(중앙값)
-    columns=X_train.columns,            # " 열=센서
-    index=X_train.index,                # " 행=인덱스(번호)
-)
-
-X_test_imputed = pd.DataFrame(          # 테스트 데이터
-    imputer.transform(X_test),          # 테스트 데이터의 결측값 채우기(중앙값)
-    columns=X_test.columns,             # " 열=센서
-    index=X_test.index,                 # " 행=인덱스(번호)
-)
-
-print("\n결측값 처리 후 학습 데이터의 결측값 확인:")
-print(X_train_imputed.isna().sum().sum())
-
-print("\n결측값 처리 후 테스트 데이터의 결측값 확인:")
-print(X_test_imputed.isna().sum().sum())
-
-
 # 센서 데이터 표준화
 # 센서별 평균을 0, 표준편차를 1에 가깝게 맞춤
 scaler = StandardScaler()
 
 X_train_scaled = pd.DataFrame(
-    scaler.fit_transform(X_train_imputed),  # 학습 데이터 기준 계산, 표준화
-    columns=X_train_imputed.columns,
-    index=X_train_imputed.index,
+    scaler.fit_transform(X_train),  # 학습 데이터 기준 계산, 표준화
+    columns=X_train.columns,
+    index=X_train.index,
 )
 
 X_test_scaled = pd.DataFrame(
-    scaler.transform(X_test_imputed),       # 학습 데이터 기준 테스트 데이터 표준화
-    columns=X_test_imputed.columns,
-    index=X_test_imputed.index,
+    scaler.transform(X_test),       # 학습 데이터 기준 테스트 데이터 표준화
+    columns=X_test.columns,
+    index=X_test.index,
 )
 
 print("\n표준화 후 학습 데이터 전체 평균:")
@@ -414,28 +391,15 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
     y_fold_train = y.iloc[fold_train_index]
     y_fold_validation = y.iloc[fold_validation_index]
 
-    # 현재 회차의 학습 데이터 기준으로 결측값 처리
-    fold_imputer = SimpleImputer(
-        strategy="median",
-    )
-
-    X_fold_train_imputed = fold_imputer.fit_transform(
-        X_fold_train,
-    )
-
-    X_fold_validation_imputed = fold_imputer.transform(
-        X_fold_validation,
-    )
-
     # 현재 회차의 학습 데이터 기준으로 표준화
     fold_scaler = StandardScaler()
 
     X_fold_train_scaled = fold_scaler.fit_transform(
-        X_fold_train_imputed,
+        X_fold_train,
     )
 
     X_fold_validation_scaled = fold_scaler.transform(
-        X_fold_validation_imputed,
+        X_fold_validation,
     )
 
     # 현재 회차의 로지스틱 회귀 모델 생성 및 학습
