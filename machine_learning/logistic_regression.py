@@ -17,7 +17,7 @@ HORIZON_SECONDS = 60                # 위험 구간 시간(초)
 
 ALARM_THRESHOLD = 0.5               # 위험으로 판정 할 확률 기준
 ALARM_CONSECUTIVE_SECONDS = 5       # 경보에 필요한 연속 위험 판정 시간(초)
-
+WINDOW_SECONDS = [10, 30, 60]       # 센서 흐름을 계산할 최근 시간 구간(초)
 
 # meas_a는 상수, indu_t는 과충전 실험에서 전부 결측이므로 제외
 SENSOR_COLUMNS = [                  # 센서 열 목록(총 16개)
@@ -130,6 +130,71 @@ print("\n5단계 이상 진입까지 남은 시간의 최솟값:")
 print(model_df["seconds_to_stage5"].min())
 
 
+# 윈도우 피처 계산을 위해 실험별 시간순으로 정렬
+model_df = model_df.sort_values(
+    ["exp_id", "rel_time"]
+).reset_index(drop=True)
+
+# 최근 10·30·60초의 변화량, 평균, 표준편차 생성
+window_features = {}
+
+for sensor in SENSOR_COLUMNS:
+    sensor_by_experiment = model_df.groupby("exp_id")[sensor]
+
+    # 실험 초반에 과거 값이 없을 때 사용할 실험별 첫 센서값
+    first_sensor_value = sensor_by_experiment.transform("first")
+
+    for window in WINDOW_SECONDS:
+        # 현재 센서값과 window초 전 센서값의 차이
+        past_sensor_value = (
+            sensor_by_experiment
+            .shift(window)
+            .fillna(first_sensor_value)
+        )
+        window_features[f"{sensor}_diff{window}"] = (
+            model_df[sensor] - past_sensor_value
+        )
+
+        # 현재 시점을 포함한 최근 window초 평균
+        window_features[f"{sensor}_mean{window}"] = (
+            sensor_by_experiment.transform(
+                lambda values: values.rolling(
+                    window,
+                    min_periods=1,
+                ).mean()
+            )
+        )
+
+        # 현재 시점을 포함한 최근 window초 표준편차
+        window_features[f"{sensor}_std{window}"] = (
+            sensor_by_experiment.transform(
+                lambda values: values.rolling(
+                    window,
+                    min_periods=1,
+                ).std()
+            ).fillna(0)
+        )
+
+# 생성한 윈도우 피처를 원본 데이터 오른쪽에 한 번에 추가
+model_df = pd.concat(
+    [
+        model_df,
+        pd.DataFrame(window_features),
+    ],
+    axis=1,
+)
+
+# 원본 센서 16개와 윈도우 피처 144개를 모델 입력으로 사용
+FEATURE_COLUMNS = (
+    SENSOR_COLUMNS
+    + list(window_features.keys())
+)
+
+print("\n기본 센서 개수:", len(SENSOR_COLUMNS))
+print("윈도우 피처 개수:", len(window_features))
+print("전체 입력 피처 개수:", len(FEATURE_COLUMNS))
+
+
 
 # 향후 HORIZON_SECONDS초 이내 5단계 이상 진입 여부
 
@@ -156,7 +221,7 @@ print(model_df.shape)
 
 
 # 모델 입력, 정답, 실험 그룹 분리
-X = model_df[SENSOR_COLUMNS]    # 모델 입력(센서)
+X = model_df[FEATURE_COLUMNS]    # 모델 입력(원본 센서 + 윈도우 피처)
 y = model_df["target"]          # 정답 라벨
 groups = model_df["exp_id"]      # 실험 그룹
 
@@ -643,6 +708,7 @@ print(f"위험 구간 기준: 5단계 이상 진입 전 {HORIZON_SECONDS}초")
 print(f"원본 데이터: {len(df):,}행, {df['exp_id'].nunique()}개 실험")
 print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
 print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
+print(f"전체 입력 피처: {len(FEATURE_COLUMNS)}개")
 print(f"위험 데이터 비율: {y.mean():.2%}")
 print("-" * 50)
 print(f"단일 분할 정확도: {test_accuracy:.4f}")
