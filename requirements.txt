@@ -2,3 +2,7 @@ pandas>=2.3.3
 pydantic>=2.12
 orjson>=3.11
 tqdm>=4.67
+numpy
+matplotlib
+seaborn
+scikit-learn

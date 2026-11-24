@@ -26,3 +26,9 @@ SENSOR_COLUMNS = [
 ]
 
 RANDOM_STATE = 42
+
+COMMON_FOCUS_SENSORS = ("meas_p", "meas_t1", "meas_t2")
+FOCUS_SENSORS_BY_METHOD = {
+    "과충전": (*COMMON_FOCUS_SENSORS, "meas_co2"),
+    "가열": (*COMMON_FOCUS_SENSORS, "meas_co", "meas_v", "thermal_t"),
+}

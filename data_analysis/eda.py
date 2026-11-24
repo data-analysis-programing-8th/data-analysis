@@ -1,3 +1,5 @@
+import argparse
+import sys
 from pathlib import Path
 import math
 import warnings
@@ -141,10 +143,7 @@ def correlation_analysis(df: pd.DataFrame, output_dir: Path) -> None:  #센서 �
     fig, ax = plt.subplots(figsize=(17, 13))
 
     sns.heatmap(
-        corr.rename(
-            index=sensor_label,
-            columns=sensor_label
-        ),
+        corr.rename(index=sensor_label,columns=sensor_label),
         cmap="coolwarm",
         annot=True,
         fmt=".2f",
@@ -182,21 +181,13 @@ def stage_distribution(df: pd.DataFrame, output_dir: Path) -> None:  #열폭주 
 
 def experiment_distribution(df: pd.DataFrame, output_dir: Path) -> None:  #실험별 데이터 개수 분석
 
-    counts = (
-        df.groupby("exp_id")
-        .size()
-        .sort_values(ascending=False)
-    )
+    counts = (df.groupby("exp_id").size().sort_values(ascending=False))
 
     counts.to_csv(output_dir / "experiment_counts.csv",encoding="utf-8-sig" )
 
     fig, ax = plt.subplots(figsize=(16, 6))
 
-    ax.bar(
-        range(len(counts)),
-        counts.values,
-        color="steelblue"
-    )
+    ax.bar(range(len(counts)),counts.values,color="steelblue")
 
     ax.set(
         title="실험별 데이터 개수",
@@ -213,11 +204,7 @@ def sensor_histograms(df: pd.DataFrame, output_dir: Path) -> None:  #센서별 �
     cols = list(SENSOR_COLUMNS)
     nrows = math.ceil(len(cols) / 4)
 
-    fig, axes = plt.subplots(
-        nrows, 4,
-        figsize=(18, 3.5 * nrows),
-        squeeze=False
-    )
+    fig, axes = plt.subplots(nrows, 4,figsize=(18, 3.5 * nrows),squeeze=False)
 
     for ax, c in zip(axes.flat, cols):
         values = df[c].dropna()
@@ -493,38 +480,54 @@ def time_quality(df: pd.DataFrame, output_dir: Path) -> None:  #실험별 경과
 
 def stage_arrival_boxplot(df: pd.DataFrame, output_dir: Path) -> None:
     stages = [1, 2, 3, 4]
-    rows = df[df["tr_stage"].isin(stages) & df["tr_method"].isin([1, 2])]
-    first = rows.groupby(["exp_id", "tr_method", "tr_stage"])["rel_time"].min().dropna()
-    first.rename("first_arrival_seconds").to_csv(
-        output_dir / "stage_arrival_by_experiment.csv", encoding="utf-8-sig"
+    rows = df[df.tr_stage.isin(stages) & df.tr_method.isin([1, 2])]
+    first = rows.groupby(["tr_method", "exp_id", "tr_stage"]).rel_time.min().dropna()
+    groups = first.groupby(level=["tr_method", "tr_stage"])
+    q1 = groups.transform("quantile", q=0.25)
+    q3 = groups.transform("quantile", q=0.75)
+    margin = 1.5 * (q3 - q1)
+    first = first[first.between(q1 - margin, q3 + margin)]
+    first.rename("first_arrival_seconds").to_csv(output_dir / "stage_arrival_by_experiment.csv")
+    first.groupby(level=["tr_method", "tr_stage"]).agg(["mean", "count"]).to_csv(
+        output_dir / "stage_arrival_summary.csv"
     )
-    summary = first.groupby(level=["tr_method", "tr_stage"]).agg(["mean", "count"])
-    summary.to_csv(output_dir / "stage_arrival_summary.csv", encoding="utf-8-sig")
-
-    fig, ax = plt.subplots(figsize=(12, 7))
-    for method, name, offset, color in [
-        (1, "가열", -0.2, "steelblue"), (2, "과충전", 0.2, "coral")
-    ]:
-        ax.bar([], [], color=color, label=name)
+    fig, ax = plt.subplots(figsize=(14, 7.5))
+    methods = [(1, "과열(가열)", "steelblue", -0.20), (2, "과충전", "coral", 0.20)]
+    for method, name, color, offset in methods:
+        subset = first[first.index.get_level_values("tr_method") == method]
+        table = subset.unstack("tr_stage").reindex(columns=stages)
+        jitter = np.linspace(0.09, 0.21, len(table))
+        x = np.array(stages) + offset + jitter[:, None]
+        values = table.to_numpy()
+        ax.plot(x.T, values.T, color=color, linewidth=0.6, alpha=0.12, zorder=1)
+        ax.scatter(x.ravel(), values.ravel(), s=16, facecolor=color, edgecolor="white",
+                   linewidth=0.55, alpha=0.95, zorder=3)
+        ax.fill_between([], [], [], color=color, edgecolor="black",
+                        label=f"{name} · {len(table)}회")
         for stage in stages:
-            values = first[(first.index.get_level_values("tr_method") == method)
-                           & (first.index.get_level_values("tr_stage") == stage)]
+            values = table[stage].dropna()
             if values.empty:
                 continue
             x = stage + offset
-            ax.boxplot(values, positions=[x], widths=0.32, patch_artist=True,
-                       boxprops={"facecolor": color}, manage_ticks=False)
+            ax.boxplot(values, positions=[x], widths=0.15, manage_ticks=False, showfliers=False,
+                       patch_artist=True, boxprops={"facecolor": color, "alpha": 0.85},
+                       medianprops={"color": "#53391e"}, zorder=2)
             mean = values.mean()
-            ax.plot(x, mean, "D", color="black", markersize=4)
-            ax.annotate(f"{mean:,.1f}초", (x, mean), xytext=(0, 7),
-                        textcoords="offset points", ha="center", fontsize=8)
-    ax.plot([], [], "D", color="black", label="평균")
+            ax.plot(x, mean, "kD", markersize=5, zorder=4)
+            ax.annotate(f"{mean:,.1f}초", (x, mean), xytext=(0, 7), ha="center",
+                        textcoords="offset points", fontsize=10, fontweight="bold", zorder=5,
+                        bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=1))
+    ax.plot([], [], "kD", label="평균")
+    ax.plot([], [], "o-", color="gray", linewidth=0.7, markersize=4, label="개별 실험 (점·연결선)")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=4, frameon=False)
+    ax.grid(False, axis="x")
+    for boundary in (1.5, 2.5, 3.5):
+        ax.axvline(boundary, color="#dedede", linewidth=0.8, zorder=0)
     ax.set_xticks(stages, [f"{stage}단계" for stage in stages])
     ax.set(xlabel="열폭주 단계", ylabel="실험 시작 후 경과 시간 (초)",
-           title="가열·과충전 실험의 단계별 최초 도달 시간 분포")
-    ax.legend()
+           title="과열·과충전 실험의 단계별 최초 도달 시간 분포 (이상치 제외)", xlim=(0.5, stages[-1] + 0.5))
     fig.tight_layout()
-    save_plot("stage_arrival_boxplot.png", output_dir)
+    save_plot("stage_arrival_1_to_4_boxplot.png", output_dir)
 
 
 def main(data_path=None, output_dir=None) -> None:  #전체 EDA를 실행.
@@ -539,5 +542,20 @@ def main(data_path=None, output_dir=None) -> None:  #전체 EDA를 실행.
     print(f'\n[완료] EDA 결과: {output_dir}')
 
 
-if __name__ == '__main__':
-    main()
+def cli():
+    parser = argparse.ArgumentParser(description="배터리 데이터 EDA 및 그래프 저장")
+    parser.add_argument("--data", default=str(DATA_PATH), help="전처리 CSV 경로")
+    parser.add_argument("--output", default=str(GRAPH_PATH), help="그래프 및 통계 CSV 저장 폴더")
+    args = parser.parse_args()
+
+    print("===== 배터리 열폭주 데이터 탐색적 분석(EDA) =====")
+    try:
+        main(data_path=args.data, output_dir=args.output)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"[오류] {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
