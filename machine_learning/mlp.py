@@ -178,6 +178,9 @@ X = model_df[FEATURE_COLUMNS]
 y = model_df["target"]
 groups = model_df["exp_id"]
 
+# 모든 행을 정상(0)으로 예측했을 때의 비교 기준 정확도
+always_normal_accuracy = 1 - y.mean()
+
 print("\n입력 데이터 X 크기:")
 print(X.shape)
 
@@ -576,6 +579,7 @@ print(f"모델 데이터: {len(X):,}행, {groups.nunique()}개 실험")
 print(f"입력 센서: {len(SENSOR_COLUMNS)}개")
 print(f"위험 데이터 비율: {y.mean():.2%}")
 print("-" * 50)
+print(f"항상 정상 기준 정확도: {always_normal_accuracy:.4f}")
 print(f"단일 분할 정확도: {test_accuracy:.4f}")
 print(f"단일 분할 Log Loss: {test_log_loss:.4f}")
 print(
