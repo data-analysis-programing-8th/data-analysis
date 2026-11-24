@@ -145,7 +145,7 @@ always_normal_accuracy = 1 - y.mean()
 # 실험 ID 단위로 학습 데이터와 테스트 데이터 분리
 group_split = GroupShuffleSplit(
     n_splits=1,        # 데이터 나누기(학습/테스트)
-    test_size=0.2,     # 20% 테스트용 / 나머지(80%) 학습용  
+    test_size=0.2,     # 20% 테스트용 / 나머지(80%) 학습용
     random_state=42,    # seed
 )
 # 학습, 테스트의 인덱스
@@ -203,7 +203,7 @@ test_accuracy = accuracy_score(     # 정확도 계산(예측값과 정답값 �
     y_pred,         # 모델 예측값
 )
 
-test_log_loss = log_loss(   # loss 계산 
+test_log_loss = log_loss(   # loss 계산
     y_test,                 # 실제 정답
     y_risk_probability,     # 모델 위험 확률
 )
@@ -458,7 +458,7 @@ for exp_id, experiment in alarm_df.groupby("exp_id"):
 
     # 위험 구간에 경보가 하나라도 있으면 탐지 성공
     detection_success = risk_alarm.any()
-    
+
     # 위험 구간에서 처음 경보가 발생한 시각
     first_alarm_time = experiment.loc[
         risk_alarm,
