@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     f1_score,
     log_loss,
     precision_score,
@@ -299,6 +300,7 @@ stratify_labels = model_df.loc[
 
 cv_accuracies = []  # 각각의 정확도
 cv_log_losses = []  # 각각의 손실값
+cv_pr_aucs = []     # 각 회차의 PR-AUC
 
 # 각 행이 검증 데이터일 때 예측된 위험 확률
 # proba는 probability(확률)의 줄임말
@@ -378,20 +380,27 @@ for fold_number, (fold_train_index, fold_validation_index) in enumerate(
         y_fold_validation,
         fold_risk_probability,
     )
+    fold_pr_auc = average_precision_score(
+        y_fold_validation,
+        fold_risk_probability,
+    )
 
     cv_accuracies.append(fold_accuracy)
     cv_log_losses.append(fold_log_loss)
+    cv_pr_aucs.append(fold_pr_auc)
 
     print(
         f"{fold_number}회차 - "
         f"정확도: {fold_accuracy:.4f}, "
-        f"Log Loss: {fold_log_loss:.4f}"
+        f"Log Loss: {fold_log_loss:.4f}, "
+        f"PR-AUC: {fold_pr_auc:.4f}"
     )
 
 
 # 교차검증 결과의 평균과 표준편차 계산
 cv_accuracy_series = pd.Series(cv_accuracies)
 cv_log_loss_series = pd.Series(cv_log_losses)
+cv_pr_auc_series = pd.Series(cv_pr_aucs)
 
 print("\nMLP 5분할 교차검증 결과")
 print("은닉층 구조:", HIDDEN_LAYER_SIZES)
@@ -405,6 +414,11 @@ print(f"평균 Log Loss: {cv_log_loss_series.mean():.4f}")
 print(
     "Log Loss 표준편차: "
     f"{cv_log_loss_series.std(ddof=1):.4f}"
+)
+print(f"평균 PR-AUC: {cv_pr_auc_series.mean():.4f}")
+print(
+    "PR-AUC 표준편차: "
+    f"{cv_pr_auc_series.std(ddof=1):.4f}"
 )
 # 교차검증 확률이 모든 행에 저장됐는지 확인
 if cv_proba.isna().any():
@@ -579,6 +593,14 @@ print(
 print(
     "교차검증 Log Loss 표준편차: "
     f"{cv_log_loss_series.std(ddof=1):.4f}"
+)
+print(
+    "교차검증 평균 PR-AUC: "
+    f"{cv_pr_auc_series.mean():.4f}"
+)
+print(
+    "교차검증 PR-AUC 표준편차: "
+    f"{cv_pr_auc_series.std(ddof=1):.4f}"
 )
 print(f"경보 기준 Recall: {recall:.4f}")
 print(f"경보 기준 Precision: {precision:.4f}")
