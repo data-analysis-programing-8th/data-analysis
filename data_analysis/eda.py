@@ -1,6 +1,7 @@
+import argparse
+import sys
 from pathlib import Path
 import math
-import warnings
 
 import matplotlib
 matplotlib.use('Agg')
@@ -8,7 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from config import DATA_PATH, GRAPH_PATH, SENSOR_COLUMNS, RANDOM_STATE
+if __package__:
+    from .config import DATA_PATH, GRAPH_PATH, SENSOR_COLUMNS, RANDOM_STATE
+else:
+    from config import DATA_PATH, GRAPH_PATH, SENSOR_COLUMNS, RANDOM_STATE
 
 sns.set_theme(style='whitegrid')
 from matplotlib import font_manager
@@ -23,6 +27,7 @@ else:
 plt.rcParams['axes.unicode_minus'] = False
 
 SENSOR_LABELS = {
+    'indu_t': '히터 온도',
     'meas_v': '전압', 'meas_a': '전류',
     'meas_t1': '배터리 온도 1', 'meas_t2': '배터리 온도 2',
     'meas_p': '압력', 'atmp_t': '주위 온도', 'thermal_t': '열화상 온도',
@@ -41,7 +46,26 @@ CATEGORY_LABELS = {'tr_method': '실험 방식', 'bat_class': '배터리 유형'
 PLOT_SAMPLE = 30000  # 그림에만 적용하는 표본 상한; CSV 통계는 전체 행 기준
 
 
+GRAPH_TITLES = {
+    'correlation': '센서 간 상관관계 히트맵',
+    'stage_distribution': '열폭주 단계별 데이터 분포',
+    'experiment_distribution': '실험별 데이터 개수',
+    'missing_ratio': '센서별 결측치 비율',
+    'sensor_histograms': '센서별 측정값 분포',
+    'sensor_boxplots': '센서별 이상치 및 분포',
+    'method_distribution': '가열·과충전 데이터 분포',
+    'battery_class_distribution': '배터리 유형별 데이터 분포',
+    'stage_sensor_전기_압력': '단계별 전압·전류·압력 패턴',
+    'stage_sensor_온도': '단계별 온도 센서 패턴',
+    'stage_sensor_가스': '단계별 가스 센서 패턴',
+    'method_sensor_전기_압력': '가열·과충전의 전기·압력 센서 비교',
+    'method_sensor_온도': '가열·과충전의 온도 센서 비교',
+    'method_sensor_가스': '가열·과충전의 가스 센서 비교',
+}
+
+
 def save_plot(filename: str, output_dir: Path) -> None:
+    filename = GRAPH_TITLES.get(Path(filename).stem, Path(filename).stem) + ".png"
     plt.savefig(output_dir / filename, dpi=180, bbox_inches='tight')
     plt.close()
     print(f'[저장] {output_dir / filename}')
@@ -51,17 +75,29 @@ def load_data(data_path: Path) -> pd.DataFrame:  # 전처리 CSV를 읽고 필�
     if not data_path.is_file():
         raise FileNotFoundError(f'데이터 파일이 없습니다: {data_path}')
     df = pd.read_csv(data_path, low_memory=False)
-    required = ['exp_id', 'tr_stage', *SENSOR_COLUMNS]
+    required = ['exp_id', 'tr_stage', 'tr_method', 'rel_time', *SENSOR_COLUMNS]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f'필수 컬럼이 없습니다: {missing}')
     if df.empty:
         raise ValueError('데이터 파일에 행이 없습니다.')
-    for c in SENSOR_COLUMNS:
+    for c in [*SENSOR_COLUMNS, *(['indu_t'] if 'indu_t' in df else [])]:
         df[c] = pd.to_numeric(df[c], errors='coerce').replace([np.inf, -np.inf], np.nan)
-    df['tr_stage'] = pd.to_numeric(df['tr_stage'], errors='coerce')
-    if 'rel_time' in df:
-        df['rel_time'] = pd.to_numeric(df['rel_time'], errors='coerce')
+    if df['exp_id'].isna().any():
+        raise ValueError('exp_id에 결측값이 있습니다.')
+    for c in ['tr_stage', 'tr_method', 'rel_time']:
+        df[c] = pd.to_numeric(df[c], errors='coerce')
+        if not np.isfinite(df[c]).all():
+            raise ValueError(f'{c}에 결측값 또는 유효하지 않은 숫자가 있습니다.')
+    for c in ['tr_stage', 'tr_method']:
+        if (df[c] % 1 != 0).any():
+            raise ValueError(f'{c}는 정수여야 합니다.')
+        df[c] = df[c].astype(int)
+    if not df['tr_method'].isin([1, 2]).all():
+        raise ValueError('tr_method는 1(가열) 또는 2(과충전)여야 합니다.')
+    for c in ['tr_method', 'bat_class']:
+        if c in df and df.groupby('exp_id')[c].nunique(dropna=False).gt(1).any():
+            raise ValueError(f'동일 실험 안에서 {c} 값이 달라집니다.')
     return df
 
 
@@ -76,61 +112,39 @@ def basic_statistics(df: pd.DataFrame, output_dir: Path) -> None:  #전체 데�
 
 
 
-def missing_ratio(df: pd.DataFrame, output_dir: Path) -> None:  #센서별 결측치 비율 분석
-
-    ratio = (
-        df[SENSOR_COLUMNS]
-        .isna()
-        .mean()
-        .mul(100)
-        .sort_values(ascending=False)
-    )
-
-    ratio.rename("missing_percent").to_csv(output_dir / "missing_ratio.csv",encoding="utf-8-sig")
-
-    exp_missing = (df.groupby("exp_id")[SENSOR_COLUMNS].agg(lambda s: s.isna().mean() * 100))
-    exp_missing.to_csv(output_dir / "missing_by_experiment.csv",encoding="utf-8-sig")
-
-    fig, ax = plt.subplots(figsize=(16, 6))
-
-    x = np.arange(len(ratio))
-    bars = ax.bar(x, ratio.values, color="steelblue")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(
-        [sensor_label(c) for c in ratio.index],
-        rotation=45,
-        ha="right"
-    )
-
-    ax.set_ylim(0, 100)
-    ax.set_title("센서별 결측치 비율")
-    ax.set_xlabel("센서")
-    ax.set_ylabel("결측치 비율 (%)")
-
-    if (ratio == 0).all():
-        ax.text(
-            0.5, 0.55,
-            "전체 센서 결측치 없음 (0%)",
-            transform=ax.transAxes,
-            ha="center",
-            va="center",
-            fontsize=16,
-            fontweight="bold"
-        )
-    else:
-        for bar, value in zip(bars, ratio.values):
-            ax.annotate(
-                f"{value:.2f}%",
-                (bar.get_x() + bar.get_width() / 2,
-                 bar.get_height()),
-                ha="center",
-                va="bottom",
-                fontsize=8
-            )
-
+def missing_ratio(df: pd.DataFrame, output_dir: Path) -> None:
+    # 품질 점검에는 모델 입력에서 제외된 히터 온도도 포함한다. 0은 결측이 아니다.
+    columns = [*SENSOR_COLUMNS, *(['indu_t'] if 'indu_t' in df else [])]
+    ratio = df[columns].isna().mean().mul(100).sort_values(ascending=False)
+    ratio.rename('missing_percent').to_csv(output_dir / 'missing_ratio.csv', encoding='utf-8-sig')
+    df.groupby('exp_id')[columns].agg(lambda s: s.isna().mean() * 100).to_csv(
+        output_dir / 'missing_by_experiment.csv', encoding='utf-8-sig')
+    quality = pd.DataFrame({
+        'missing_count': df[columns].isna().sum(),
+        'missing_percent': df[columns].isna().mean() * 100,
+        'zero_percent_of_all_rows': df[columns].eq(0).mean() * 100,
+        'unique_nonmissing_values': df[columns].nunique(),
+    })
+    quality.to_csv(output_dir / 'sensor_quality.csv', encoding='utf-8-sig')
+    by_method = df.groupby('tr_method')[columns].agg(lambda s: s.isna().mean() * 100)
+    by_method.to_csv(output_dir / 'missing_by_method.csv', encoding='utf-8-sig')
+    plots = [('전체', ratio)] + [
+        ({1: '가열', 2: '과충전'}[method], values.reindex(ratio.index))
+        for method, values in by_method.iterrows()
+    ]
+    fig, axes = plt.subplots(len(plots), 1, figsize=(16, 10), sharex=True, squeeze=False)
+    for ax, (name, values) in zip(axes.flat, plots):
+        bars = ax.bar(np.arange(len(values)), values, color='steelblue')
+        ax.set_ylim(0, 112)
+        ax.set_ylabel('결측률 (%)')
+        ax.set_title(name)
+        for bar, value in zip(bars, values):
+            ax.annotate(f'{value:.1f}%', (bar.get_x() + bar.get_width()/2, value),
+                        ha='center', va='bottom', fontsize=8)
+    axes[-1, 0].set_xticks(np.arange(len(ratio)), [sensor_label(c) for c in ratio.index], rotation=45, ha='right')
+    fig.suptitle('센서별 결측치 비율\n전체/조건별 관측 행 기준 · 히터 온도 포함 · 0은 결측으로 처리하지 않음 · 결측 원인은 별도 확인', fontsize=15)
     fig.tight_layout()
-    save_plot("missing_ratio.png", output_dir)
+    save_plot('missing_ratio.png', output_dir)
 
 def correlation_analysis(df: pd.DataFrame, output_dir: Path) -> None:  #센서 간 피어슨 상관관계 분석
 
@@ -141,10 +155,7 @@ def correlation_analysis(df: pd.DataFrame, output_dir: Path) -> None:  #센서 �
     fig, ax = plt.subplots(figsize=(17, 13))
 
     sns.heatmap(
-        corr.rename(
-            index=sensor_label,
-            columns=sensor_label
-        ),
+        corr.rename(index=sensor_label,columns=sensor_label),
         cmap="coolwarm",
         annot=True,
         fmt=".2f",
@@ -154,7 +165,8 @@ def correlation_analysis(df: pd.DataFrame, output_dir: Path) -> None:  #센서 �
         ax=ax
     )
 
-    ax.set_title("센서 간 상관관계 분석")
+    ax.set_facecolor('#dddddd')
+    ax.set_title("센서 간 상관관계 히트맵\n피어슨 상관계수 · 전체 단계의 행 기준 · 회색: 상수 또는 유효한 쌍 부족으로 계산 불가")
     ax.tick_params(axis="x", labelrotation=45)
     ax.tick_params(axis="y", labelrotation=0)
 
@@ -175,33 +187,27 @@ def stage_distribution(df: pd.DataFrame, output_dir: Path) -> None:  #열폭주 
     ax.set(
         title="열폭주 단계별 데이터 분포",
         xlabel="열폭주 단계",
-        ylabel="데이터 개수"
+        ylabel="관측 행 수"
     )
     fig.tight_layout()
     save_plot("stage_distribution.png", output_dir)
 
 def experiment_distribution(df: pd.DataFrame, output_dir: Path) -> None:  #실험별 데이터 개수 분석
 
-    counts = (
-        df.groupby("exp_id")
-        .size()
-        .sort_values(ascending=False)
-    )
+    counts = (df.groupby("exp_id").size().sort_values(ascending=False))
 
     counts.to_csv(output_dir / "experiment_counts.csv",encoding="utf-8-sig" )
+    counts.rename('row_count').rename_axis('exp_id').reset_index().rename_axis('plot_rank').to_csv(
+        output_dir / 'experiment_plot_order.csv', encoding='utf-8-sig')
 
     fig, ax = plt.subplots(figsize=(16, 6))
 
-    ax.bar(
-        range(len(counts)),
-        counts.values,
-        color="steelblue"
-    )
+    ax.bar(range(len(counts)),counts.values,color="steelblue")
 
     ax.set(
         title="실험별 데이터 개수",
-        xlabel="실험 (데이터 개수 내림차순)",
-        ylabel="데이터 개수"
+        xlabel="관측 행 수 내림차순 순번 (0부터 시작, 실험 ID 아님)",
+        ylabel="관측 행 수"
     )
 
     fig.tight_layout()
@@ -213,11 +219,7 @@ def sensor_histograms(df: pd.DataFrame, output_dir: Path) -> None:  #센서별 �
     cols = list(SENSOR_COLUMNS)
     nrows = math.ceil(len(cols) / 4)
 
-    fig, axes = plt.subplots(
-        nrows, 4,
-        figsize=(18, 3.5 * nrows),
-        squeeze=False
-    )
+    fig, axes = plt.subplots(nrows, 4,figsize=(18, 3.5 * nrows),squeeze=False)
 
     for ax, c in zip(axes.flat, cols):
         values = df[c].dropna()
@@ -249,7 +251,7 @@ def sensor_histograms(df: pd.DataFrame, output_dir: Path) -> None:  #센서별 �
     for ax in axes.flat[len(cols):]:
         ax.set_visible(False)
 
-    fig.suptitle("센서별 측정값 분포",fontsize=16)
+    fig.suptitle("센서별 측정값 분포\n전체 단계 · 센서별 유효 관측값에서 최대 30,000행 표본 추출 (CSV 통계는 전체 행)",fontsize=16)
     fig.tight_layout()
 
     save_plot("sensor_histograms.png", output_dir)
@@ -282,7 +284,7 @@ def sensor_boxplots(df: pd.DataFrame, output_dir: Path) -> None:  #센서별 측
     for ax in axes.flat[len(cols):]:
         ax.set_visible(False)
 
-    fig.suptitle("센서별 이상치 및 분포",fontsize=16)
+    fig.suptitle("센서별 이상치 및 분포\n센서별 최대 30,000행 표본 · 점: 표본의 1.5 IQR 밖 관측값 · 자동 삭제하지 않음 · CSV는 전체 행 기준",fontsize=16)
     fig.tight_layout()
     save_plot("sensor_boxplots.png", output_dir)
 
@@ -323,7 +325,6 @@ def category_distributions(df: pd.DataFrame,output_dir: Path) -> None:  #실험 
         labels = df[column].map(
             lambda value: display_label(column, value)
         )
-        counts = labels.value_counts()
         summary = (
             df.assign(display_category=labels)
             .groupby("display_category")
@@ -333,28 +334,15 @@ def category_distributions(df: pd.DataFrame,output_dir: Path) -> None:  #실험 
             )
         )
         summary.to_csv(output_dir / f"{column}_counts.csv",encoding="utf-8-sig")
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        bars = ax.bar(
-            counts.index,
-            counts.values,
-            color="steelblue",
-            width=0.6
-        )
-
-        for bar in bars:
-            height = bar.get_height()
-            ax.annotate(
-                f"{height:,}",
-                (bar.get_x() + bar.get_width() / 2, height),
-                ha="center",
-                va="bottom"
-            )
-
-        ax.set_ylim(0, counts.max() * 1.15)
-        ax.set_title(f"{CATEGORY_LABELS.get(column, column)}별 데이터 분포")
-        ax.set_xlabel(CATEGORY_LABELS.get(column, column))
-        ax.set_ylabel("데이터 행 수")
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+        for ax, key, title in zip(axes, ['row_count', 'experiment_count'], ['관측 행 수', '고유 실험 수']):
+            values = summary[key]
+            bars = ax.bar(values.index, values.values, color='steelblue', width=0.6)
+            ax.bar_label(bars, fmt='%.0f', padding=3)
+            ax.set_ylim(0, max(1, values.max()) * 1.18)
+            ax.set_title(title)
+            ax.set_ylabel(title)
+        fig.suptitle(GRAPH_TITLES[Path(filename).stem] + '\n전체 단계 · 관측 행 수와 고유 실험 수')
 
         fig.tight_layout()
         save_plot(filename, output_dir)
@@ -398,6 +386,7 @@ def stage_sensor_patterns(df: pd.DataFrame,output_dir: Path) -> None:  #열폭�
             scaled.rename(columns=sensor_label),
             cmap="coolwarm",
             center=0,
+            vmin=-3, vmax=3,
             annot=True,
             fmt=".1f",
             linewidths=0.5,
@@ -405,7 +394,8 @@ def stage_sensor_patterns(df: pd.DataFrame,output_dir: Path) -> None:  #열폭�
             cbar_kws={"label": "센서별 상대 표준화 점수"}
         )
 
-        ax.set_title(f"열폭주 단계별 {group_name} 센서 패턴")
+        ax.set_facecolor('#dddddd')
+        ax.set_title(GRAPH_TITLES[f"stage_sensor_{group_name}"] + "\n전체 단계 · 센서 중앙값의 표준화 점수 · 회색: 단계 간 변화 없음/계산 불가")
         ax.set_xlabel("센서")
         ax.set_ylabel("열폭주 단계")
         ax.tick_params(axis="x", labelrotation=35)
@@ -423,6 +413,10 @@ def method_sensor_patterns(df: pd.DataFrame, output_dir: Path) -> None:  #가열
     med = df.groupby("tr_method")[SENSOR_COLUMNS].median()
 
     med.to_csv(output_dir / "method_sensor_medians.csv",encoding="utf-8-sig")
+    per_experiment = df.groupby(['tr_method', 'exp_id'])[SENSOR_COLUMNS].median()
+    per_experiment.to_csv(output_dir / 'experiment_sensor_medians.csv', encoding='utf-8-sig')
+    per_experiment.groupby(level='tr_method').mean().to_csv(
+        output_dir / 'method_mean_of_experiment_medians.csv', encoding='utf-8-sig')
 
     if med.empty:
         return
@@ -467,13 +461,16 @@ def method_sensor_patterns(df: pd.DataFrame, output_dir: Path) -> None:  #가열
             ax.bar(names, values.values,color=["steelblue", "coral"][:len(values)])
 
             ax.set_title(sensor_label(column))
-            ax.set_ylabel("중앙값")
+            ax.set_ylabel("전체 관측 행의 중앙값")
+            if df[column].nunique() == 1:
+                ax.text(0.5, 0.7, f'상수 변수: {df[column].dropna().iloc[0]:g}',
+                        transform=ax.transAxes, ha='center')
             ax.tick_params(axis="x", labelrotation=0)
 
         for ax in axes.flat[len(columns):]:
             ax.set_visible(False)
 
-        fig.suptitle(f"실험 방식별 {group_name} 센서 중앙값 비교",fontsize=15)
+        fig.suptitle(GRAPH_TITLES[f"method_sensor_{group_name}"] + "\n전체 단계의 행을 합친 중앙값 · 실험별 동일 가중치 아님",fontsize=15)
         fig.tight_layout()
 
         save_plot(f"method_sensor_{group_name}.png",output_dir)
@@ -487,8 +484,69 @@ def time_quality(df: pd.DataFrame, output_dir: Path) -> None:  #실험별 경과
         times = g['rel_time'].dropna()
         delta = times.diff().dropna()
         positive = delta[delta > 0]
-        records.append({'exp_id': exp_id, 'rows': len(g), 'time_min_s': times.min(), 'time_max_s': times.max(), 'duplicate_or_backward_steps': int((delta <= 0).sum()), 'median_positive_interval_s': positive.median() if not positive.empty else np.nan})
+        records.append({'min_positive_interval_s': positive.min(),
+                        'max_positive_interval_s': positive.max(),
+                        'intervals_over_1s': int((delta > 1).sum()),
+                        'exp_id': exp_id, 'rows': len(g), 'time_min_s': times.min(), 'time_max_s': times.max(), 'duplicate_or_backward_steps': int((delta <= 0).sum()), 'median_positive_interval_s': positive.median() if not positive.empty else np.nan})
     pd.DataFrame(records).to_csv(output_dir / 'experiment_time_quality.csv', index=False, encoding='utf-8-sig')
+
+
+def stage_arrival_boxplot(df: pd.DataFrame, output_dir: Path) -> None:
+    stages = [1, 2, 3, 4]
+    rows = df[df.tr_stage.isin(stages) & df.tr_method.isin([1, 2])]
+    first = rows.groupby(["tr_method", "exp_id", "tr_stage"]).rel_time.min().dropna()
+    first.rename('first_arrival_seconds').to_csv(output_dir / 'stage_arrival_unfiltered.csv')
+    groups = first.groupby(level=["tr_method", "tr_stage"])
+    groups.agg(['mean', 'median', 'count']).to_csv(output_dir / 'stage_arrival_unfiltered_summary.csv')
+    q1 = groups.transform("quantile", q=0.25)
+    q3 = groups.transform("quantile", q=0.75)
+    margin = 1.5 * (q3 - q1)
+    keep = first.between(q1 - margin, q3 + margin)
+    audit = pd.DataFrame({'first_arrival_seconds': first, 'lower_bound': q1-margin,
+                          'upper_bound': q3+margin, 'included': keep})
+    audit.to_csv(output_dir / 'stage_arrival_filter_audit.csv')
+    first = first[keep]
+    first.rename("first_arrival_seconds").to_csv(output_dir / "stage_arrival_by_experiment.csv")
+    first.groupby(level=["tr_method", "tr_stage"]).agg(["mean", "count"]).to_csv(
+        output_dir / "stage_arrival_summary.csv"
+    )
+    fig, ax = plt.subplots(figsize=(14, 7.5))
+    methods = [(1, "가열", "steelblue", -0.20), (2, "과충전", "coral", 0.20)]
+    for method, name, color, offset in methods:
+        subset = first[first.index.get_level_values("tr_method") == method]
+        table = subset.unstack("tr_stage").reindex(columns=stages)
+        jitter = np.linspace(0.09, 0.21, len(table))
+        x = np.array(stages) + offset + jitter[:, None]
+        values = table.to_numpy()
+        ax.plot(x.T, values.T, color=color, linewidth=0.6, alpha=0.12, zorder=1)
+        ax.scatter(x.ravel(), values.ravel(), s=16, facecolor=color, edgecolor="white",
+                   linewidth=0.55, alpha=0.95, zorder=3)
+        ax.fill_between([], [], [], color=color, edgecolor="black",
+                        label=f"{name} · 한 단계 이상 포함 {len(table)}개 실험")
+        for stage in stages:
+            values = table[stage].dropna()
+            if values.empty:
+                continue
+            x = stage + offset
+            ax.boxplot(values, positions=[x], widths=0.15, manage_ticks=False, showfliers=False,
+                       patch_artist=True, boxprops={"facecolor": color, "alpha": 0.85},
+                       medianprops={"color": "#53391e"}, zorder=2)
+            mean = values.mean()
+            ax.plot(x, mean, "kD", markersize=5, zorder=4)
+            ax.annotate(f"{mean:,.1f}초\nn={len(values)}", (x, mean), xytext=(0, 7), ha="center",
+                        textcoords="offset points", fontsize=10, fontweight="bold", zorder=5,
+                        bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=1))
+    ax.plot([], [], "kD", label="평균")
+    ax.plot([], [], "o-", color="gray", linewidth=0.7, markersize=4, label="개별 실험 (점·연결선)")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=4, frameon=False)
+    ax.grid(False, axis="x")
+    for boundary in (1.5, 2.5, 3.5):
+        ax.axvline(boundary, color="#dedede", linewidth=0.8, zorder=0)
+    ax.set_xticks(stages, [f"{stage}단계" for stage in stages])
+    ax.set(xlabel="열폭주 단계", ylabel="실험 시작 후 경과 시간 (초)",
+           title="가열·과충전 단계별 최초 도달 시간 · 방식/단계별 1.5 IQR 밖 제외\n검정 마름모: 제외 후 평균 · n: 해당 단계에 남은 실험 수", xlim=(0.5, stages[-1] + 0.5))
+    fig.tight_layout()
+    save_plot("stage_arrival_1_to_4_boxplot.png", output_dir)
 
 
 def main(data_path=None, output_dir=None) -> None:  #전체 EDA를 실행.
@@ -497,11 +555,26 @@ def main(data_path=None, output_dir=None) -> None:  #전체 EDA를 실행.
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f'[데이터 읽기] {data_path}')
     df = load_data(data_path)
-    for fn in [basic_statistics, missing_ratio, correlation_analysis, stage_distribution, experiment_distribution, sensor_histograms, sensor_boxplots, outlier_summary, category_distributions, stage_sensor_patterns, method_sensor_patterns, time_quality]:
+    for fn in [basic_statistics, missing_ratio, correlation_analysis, stage_distribution, experiment_distribution, sensor_histograms, sensor_boxplots, outlier_summary, category_distributions, stage_sensor_patterns, method_sensor_patterns, time_quality, stage_arrival_boxplot]:
         print(f'\n[분석] {fn.__name__}')
         fn(df, output_dir)
     print(f'\n[완료] EDA 결과: {output_dir}')
 
 
-if __name__ == '__main__':
-    main()
+def cli():
+    parser = argparse.ArgumentParser(description="배터리 데이터 EDA 및 그래프 저장")
+    parser.add_argument("--data", default=str(DATA_PATH), help="전처리 CSV 경로")
+    parser.add_argument("--output", default=str(GRAPH_PATH), help="그래프 및 통계 CSV 저장 폴더")
+    args = parser.parse_args()
+
+    print("===== 배터리 열폭주 데이터 탐색적 분석(EDA) =====")
+    try:
+        main(data_path=args.data, output_dir=args.output)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"[오류] {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
